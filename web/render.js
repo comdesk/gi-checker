@@ -114,15 +114,56 @@ export function giMeter(food) {
   </div>`;
 }
 
+/**
+ * 조리법 비교. 조리법마다 대표 하나씩만 골라 보여준다.
+ *
+ * 그룹은 GI 오름차순이라 앞에서 자르면 가장 나쁜 선택지가 늘 빠진다.
+ * 그리고 품종만 다른 중복(분질/점질 찐것)이 칸을 다 먹는다.
+ * 이 기능의 목적은 "조리법에 따라 얼마나 달라지나" 를 보여주는 것이므로
+ * 조리법 단위로 접어서 보여준다.
+ */
+function pickByMethod(food, members) {
+  const seen = new Map();   // method -> 대표 레코드
+  for (const m of members) {
+    const key = m.method ?? '기타';
+    // 지금 보고 있는 항목이 있으면 그것을 대표로 삼는다
+    if (!seen.has(key) || m.id === food.id) seen.set(key, m);
+  }
+  const out = [...seen.values()];
+  // GI 오름차순, GI 없는 것은 뒤로
+  out.sort((a, b) => {
+    const av = a.gi.value, bv = b.gi.value;
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return av - bv;
+  });
+  return out;
+}
+
 /** 조리법 비교. 항목이 2개 미만이면 섹션을 내보내지 않는다. */
 export function waysList(food, members) {
-  if (!members || members.length < 2) return '';
+  if (!members) return '';
+
+  let rows = pickByMethod(food, members);
+  if (rows.length < 2) return '';          // 비교할 게 없으면 섹션을 안 낸다
+
+  if (rows.length > 5) {
+    const must = new Set([food.id, rows[rows.length - 1].id]);   // 현재 항목 + 최악
+    const keep = rows.filter(r => must.has(r.id));
+    for (const r of rows) {
+      if (keep.length >= 5) break;
+      if (!must.has(r.id)) keep.push(r);
+    }
+    // 다시 GI 순으로 정렬해 표시 순서를 유지한다
+    rows = keep.sort((a, b) => rows.indexOf(a) - rows.indexOf(b));
+  }
 
   const heading = food.verdict.level === 'red'
     ? `같은 ${esc(food.group)}라도 이렇게 드세요`
     : '조리법에 따라 이렇게 달라져요';
 
-  const rows = members.slice(0, 5).map(m => {
+  const wayRows = rows.map(m => {
     const level = m.verdict.level;
     const isNow = m.id === food.id;
     const label = esc(m.method ?? displayName(m));
@@ -139,7 +180,7 @@ export function waysList(food, members) {
 
   return `<section class="sec">
     <h2 class="sec-h">${heading}</h2>
-    <div class="ways">${rows}</div>
+    <div class="ways">${wayRows}</div>
   </section>`;
 }
 
