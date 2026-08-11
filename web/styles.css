@@ -127,3 +127,8 @@ details.more summary::-webkit-details-marker{display:none}
 
 .disclaimer{margin:36px 22px 0;padding-top:18px;border-top:1px solid var(--line2);
             font-size:14px;line-height:1.6;color:var(--ink3)}
+
+/* ── 검색창 셸: 화면 전환에도 사라지지 않는다 (한글 조합 보존) ── */
+.hidden{display:none}
+#shell.compact{padding-bottom:14px}
+#shell.compact h1{font-size:21px}
