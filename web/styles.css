@@ -33,7 +33,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 .search input{flex:1;border:0;outline:0;font-size:21px;font-weight:600;
               background:transparent;min-width:0}
 .search input::placeholder{color:var(--ink3);font-weight:600}
-.search .ic{font-size:23px;line-height:1}
+/* 이모지는 일반 글자보다 위아래로 넓다. line-height:1 이면 윗부분이 잘린다. */
+.search .ic{font-size:23px;line-height:1.3;flex:none}
 .search .clear{font-size:22px;color:var(--ink3);padding:0 4px;min-width:44px;text-align:center}
 
 /* ── 즐겨찾기 칩 ── */
@@ -48,7 +49,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 .cat{display:flex;align-items:center;gap:13px;padding:19px 16px;border-radius:16px;
      border:1px solid var(--line);background:#fbfcfd;font-size:20px;font-weight:700;
      letter-spacing:-.02em;min-height:62px}
-.cat .e{font-size:27px;line-height:1}
+.cat .e{font-size:27px;line-height:1.3;flex:none}
 
 /* ── 목록 ── */
 .hint{margin:14px 20px 0;padding:12px 15px;border-radius:12px;background:#eef4ff;
