@@ -6,7 +6,7 @@ const HANGUL_BASE = 0xac00;
 const HANGUL_LAST = 0xd7a3;
 const JUNG_JONG = 588;
 
-const RANK = { exact: 0, prefix: 1, substring: 2, chosung: 3, fuzzy: 4 };
+const RANK = { exact: 0, group: 1, prefix: 2, substring: 3, chosung: 4, fuzzy: 5 };
 
 export function normalizeQuery(text) {
   return String(text ?? '').replace(/[\s,·()[\]/\-_.]+/g, '').toLowerCase();
@@ -51,6 +51,9 @@ function haystacks(food) {
 function matchKind(query, food) {
   const fields = haystacks(food);
   if (fields.some(h => h === query)) return 'exact';
+  // 질의가 이 음식의 대표 이름과 정확히 같으면 '그 음식 자체'다.
+  // '고구마' 검색 시 '찐 고구마'(group=고구마)가 '고구마밥'(group=null)보다 앞선다.
+  if (food.group && normalizeQuery(food.group) === query) return 'group';
   if (fields.some(h => h.startsWith(query))) return 'prefix';
   if (fields.some(h => h.includes(query))) return 'substring';
   return null;

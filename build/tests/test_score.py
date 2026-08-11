@@ -178,3 +178,9 @@ def test_세_컷이_모두_인자로_조정_가능하다():
     n = Nutrients(kcal=200, carb=30, sugar=16, fiber=1, fat=2)
     assert judge(n, gi=40, sugar_abs=15).level == "amber"
     assert judge(n, gi=40, sugar_abs=20).level == "green"
+
+
+def test_나트륨은_판정을_바꾸지_않는다():
+    base = Nutrients(kcal=50, carb=3.0, sugar=1.0, fiber=0.5, fat=1.0)
+    salty = Nutrients(kcal=50, carb=3.0, sugar=1.0, fiber=0.5, fat=1.0, sodium=5000)
+    assert judge(base, gi=None) == judge(salty, gi=None)

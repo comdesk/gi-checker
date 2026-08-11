@@ -27,6 +27,7 @@ COL = {
     "sugar": "당류(g)",
     "fiber": "식이섬유(g)",
     "fat": "지방(g)",
+    "sodium": "나트륨(mg)",
 }
 
 # 실제 1인분 중량. 음식.csv 에만 있고(19,483/19,495행 값 있음) 원재료성 두 파일(53컬럼)엔
@@ -63,6 +64,7 @@ class FoodRecord:
     rep_name: str                  # 원본 대표식품명
     serving_label: str             # '100g 기준'
     nutrients: Nutrients
+    serving_grams: float | None = None   # 1회 분량 실제 중량(g). ml 은 1ml=1g 근사. 모르면 None
     group: str | None = None
     method: str | None = None
     gi_value: float | None = None
@@ -105,6 +107,19 @@ def _weight_label(raw: str) -> str | None:
     num, unit = m.groups()
     value = round(float(num))
     return f"{value}{unit.lower()}"
+
+
+def _weight_grams(raw: str) -> float | None:
+    """'식품중량' 원본 값에서 그램(밀리리터) 수치만 뽑는다. 형식이 아니면 None.
+
+    ml 은 밀도를 몰라 1ml=1g 으로 근사한다 — 대부분 국·음료라 오차가 작다는
+    가정이다. bundle.py 의 per_serving() 도 같은 가정을 쓴다.
+    """
+    m = _WEIGHT_RE.match(str(raw or ""))
+    if not m:
+        return None
+    num, _unit = m.groups()
+    return round(float(num))
 
 
 def _is_franchise(name: str, *, capped: bool) -> bool:
@@ -168,6 +183,10 @@ def load_extra_foods(path: Path, allow_labels: set[str]) -> list[FoodRecord]:
                     raise SystemExit(f"extra_foods.csv:{lineno} '{name}' 의 {key} 가 비어 있습니다")
                 return value
 
+            # 나트륨은 필수가 아니다 — 원본에 없으면 0.0 (모르는 값을 0으로 채운 경우는
+            # extra_foods.csv 의 note 열에 그 사실을 남긴다).
+            sodium = _num(row.get("sodium")) or 0.0
+
             out.append(FoodRecord(
                 id=re.sub(r"[^0-9A-Za-z가-힣+]+", "-", name).strip("-"),
                 name=name,
@@ -177,7 +196,7 @@ def load_extra_foods(path: Path, allow_labels: set[str]) -> list[FoodRecord]:
                 serving_label=_clean(row.get("serving_label")) or "100g 기준",
                 nutrients=Nutrients(
                     kcal=num("kcal"), carb=num("carb"), sugar=num("sugar"),
-                    fiber=num("fiber"), fat=num("fat"),
+                    fiber=num("fiber"), fat=num("fat"), sodium=sodium,
                 ),
                 method=_clean(row.get("method")) or None,
                 source=_clean(row.get("source")),
@@ -267,9 +286,11 @@ def load_records(raw_dir: Path, allow_path: Path):
                     stats["프랜차이즈제외"] += 1
                     continue
 
-                values = {k: _num(row[COL[k]]) for k in ("kcal", "carb", "sugar", "fiber", "fat")}
+                values = {k: _num(row[COL[k]])
+                          for k in ("kcal", "carb", "sugar", "fiber", "fat", "sodium")}
                 # 탄수화물·열량 둘 중 하나라도 없으면 판정 자체가 불가능하니 제외한다.
-                # (당류·식이섬유·지방은 없으면 0으로 채워도 판정에 지장 없음)
+                # (당류·식이섬유·지방·나트륨은 없으면 0으로 채워도 판정에 지장 없음 —
+                #  나트륨은 애초에 판정에 쓰이지도 않는다)
                 if values["carb"] is None or values["kcal"] is None:
                     stats["영양성분누락"] += 1
                     continue
@@ -289,10 +310,13 @@ def load_records(raw_dir: Path, allow_path: Path):
                 # 기존대로 '100g/100ml 기준'. 영양성분 수치는 어느 쪽이든 100g/100ml
                 # 그대로다 — 여기서 환산하지 않는다.
                 serving_label = f"{unit} 기준"
+                serving_grams = None
                 if has_weight_col:
-                    weight_label = _weight_label(row.get(WEIGHT_COL, ""))
+                    raw_weight = row.get(WEIGHT_COL, "")
+                    weight_label = _weight_label(raw_weight)
                     if weight_label:
                         serving_label = weight_label
+                        serving_grams = _weight_grams(raw_weight)
 
                 record = FoodRecord(
                     id=food_id,
@@ -301,11 +325,13 @@ def load_records(raw_dir: Path, allow_path: Path):
                     category=label,
                     rep_name=_clean(row[COL["rep"]]) or name,
                     serving_label=serving_label,
+                    serving_grams=serving_grams,
                     nutrients=Nutrients(
                         kcal=round(values["kcal"], 1), carb=round(values["carb"], 1),
                         sugar=round(values["sugar"] or 0, 1),
                         fiber=round(values["fiber"] or 0, 1),
                         fat=round(values["fat"] or 0, 1),
+                        sodium=round(values["sodium"] or 0, 1),
                     ),
                 )
 

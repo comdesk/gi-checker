@@ -25,6 +25,7 @@ class Nutrients:
     sugar: float
     fiber: float
     fat: float
+    sodium: float = 0.0   # 표시 전용. 판정에 쓰지 않는다
 
 
 @dataclass(frozen=True)

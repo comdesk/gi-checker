@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeQuery, chosungOf, isChosungOnly, searchFoods } from '../search.js';
 
-const make = (name, chosung, alias = []) => ({
+const make = (name, chosung, alias = [], group = null) => ({
   id: name,
   name,
+  group,
   search: { norm: name.replace(/[\s,·()]/g, ''), chosung, alias }
 });
 
@@ -105,4 +106,16 @@ test('한 글자 질의에는 오타 보정을 하지 않는다', () => {
   // '배' 는 어디에도 없다. q.length >= 2 가드가 없으면 한 글자는
   // 모든 음식의 첫 글자와 편집거리 1 안에 들어 전부 fuzzy 로 걸린다.
   assert.deepEqual(searchFoods('배', FOODS), []);
+});
+
+test('대표 이름이 질의와 같으면 파생 음식보다 앞선다', () => {
+  const foods = [
+    { id:'고구마밥', name:'고구마밥', group:null,
+      search:{ norm:'고구마밥', chosung:'ㄱㄱㅁㅂ', alias:[] } },
+    { id:'고구마_찐것', name:'고구마_찐것', group:'고구마',
+      search:{ norm:'고구마찐것', chosung:'ㄱㄱㅁㅉㄱ', alias:['찐고구마'] } },
+  ];
+  const r = searchFoods('고구마', foods);
+  assert.equal(r[0].food.id, '고구마_찐것');
+  assert.equal(r[0].kind, 'group');
 });

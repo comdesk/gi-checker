@@ -116,9 +116,48 @@ def test_화면_이름으로도_검색된다(bundle):
             assert dn in f["search"]["alias"], f"{f['display']} 로 검색 불가"
 
 
-def test_주의문구가_남발되지_않는다(bundle):
-    cautions = [f for f in bundle["foods"] if f["caution"]]
-    assert len(cautions) <= 10, f"주의 문구 {len(cautions)}건 — 너무 많습니다"
+def test_손으로_쓴_주의문구는_남발되지_않는다(bundle):
+    """caution.csv 로 손으로 붙인 것은 여전히 적어야 한다.
+
+    나트륨 자동 생성 문구는 별도(test_나트륨_주의가_5퍼센트를_넘지_않는다)로 검증한다 —
+    둘을 같은 상한으로 묶으면 나트륨 기능 자체가 성립할 수 없다.
+    """
+    hand = [f for f in bundle["foods"]
+            if f["caution"] and not f["caution"].startswith("나트륨이 한 번에")]
+    assert len(hand) <= 10, f"손으로 쓴 주의 문구 {len(hand)}건 — 너무 많습니다"
+
+
+def test_나트륨_주의가_5퍼센트를_넘지_않는다(bundle):
+    """경고가 흔해지면 아무도 안 읽는다 — 전체의 5% 를 넘으면 SODIUM_CAUTION_MG 를 올려야 한다."""
+    total = len(bundle["foods"])
+    salty = [f for f in bundle["foods"]
+             if f["caution"] and f["caution"].startswith("나트륨이 한 번에")]
+    assert len(salty) <= total * 0.05, f"나트륨 주의 {len(salty)}건 — 전체의 5% 초과"
+
+
+def test_1회분량_환산이_100g_기준과_일관된다(bundle):
+    for f in bundle["foods"]:
+        g = f["serving"]["grams"]
+        ps = f["perServing"]
+        if g is None:
+            assert ps is None, f["name"]
+            continue
+        assert ps is not None, f["name"]
+        expected = round(f["nutrients"]["carb"] * g / 100.0, 1)
+        assert abs(ps["carb"] - expected) < 0.15, f"{f['name']}: {ps['carb']} vs {expected}"
+
+
+def test_나트륨이_모든_레코드에_있다(bundle):
+    for f in bundle["foods"]:
+        assert "sodium" in f["nutrients"]
+        assert f["nutrients"]["sodium"] >= 0
+
+
+def test_판정은_나트륨과_무관하다(bundle):
+    """신호등은 혈당만 본다. 나트륨이 높다고 등급이 내려가면 안 된다."""
+    salty = [f for f in bundle["foods"] if f["nutrients"]["sodium"] >= 600]
+    assert any(f["verdict"]["level"] == "green" for f in salty), \
+        "나트륨 높은 음식이 전부 초록이 아니게 됐다면 판정에 나트륨이 섞인 것"
 
 
 def test_아는_음식의_판정이_상식에_맞는다(bundle):

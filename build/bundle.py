@@ -15,6 +15,13 @@ CHOSUNG = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
 HANGUL_BASE, JUNG_JONG = 0xAC00, 588
 PUNCT = re.compile(r"[\s,·()\[\]/\-_.]+")
 
+# 1회 분량 기준. 출발점은 WHO 하루 권고 2000mg 의 절반(1000mg)이었으나 실측 데이터로
+# 돌려보니 전체의 7.8%(462건)에 붙어 "너무 흔해서 아무도 안 읽는" 상태였다.
+# 1400mg 으로 올리면 전체의 4.8%(282건, 5% 상한 이내)로 줄면서, 국물 음식의 대표
+# 예시인 알탕_해물(940ml 한 그릇 1,466mg)은 여전히 걸린다 — build/bundle.py 리포트로
+# 확인했다(build/tests/test_bundle.py 의 test_나트륨_주의가_5퍼센트를_넘지_않는다 참고).
+SODIUM_CAUTION_MG = 1400
+
 
 def search_norm(text: str) -> str:
     return PUNCT.sub("", str(text or "")).lower()
@@ -48,6 +55,22 @@ def search_aliases(name: str, display: str, alias: list[str]) -> list[str]:
     return sorted(out)
 
 
+def per_serving(n, grams):
+    """1회 분량 기준 환산. 분량을 모르면 None.
+
+    수치는 100g 기준이므로 grams/100 을 곱한다.
+    ml 은 밀도를 몰라 1ml=1g 으로 근사한다 (normalize.py 와 같은 가정).
+    """
+    if not grams:
+        return None
+    k = grams / 100.0
+    return {
+        "kcal": round(n.kcal * k, 1), "carb": round(n.carb * k, 1),
+        "sugar": round(n.sugar * k, 1), "fiber": round(n.fiber * k, 1),
+        "fat": round(n.fat * k, 1), "sodium": round(n.sodium * k),
+    }
+
+
 def build(base: Path):
     records, filter_stats = load_records(
         base / "raw", base / "data" / "category_allow.csv")
@@ -57,6 +80,7 @@ def build(base: Path):
     foods, groups = [], {}
     level_counts = {"green": 0, "amber": 0, "red": 0}
     kind_counts = {"measured": 0, "estimated": 0, "na": 0, "none": 0}
+    sodium_caution_count = 0
 
     for r in records:
         verdict = judge(r.nutrients, r.gi_value)
@@ -75,6 +99,16 @@ def build(base: Path):
         # 화면에 보이는 이름으로도 검색되어야 한다. 원본 표기와 다를 수 있다.
         aliases = search_aliases(r.name, display, r.alias)
 
+        ps = per_serving(r.nutrients, r.serving_grams)
+
+        # 나트륨 주의 자동 생성. 손으로 쓴 caution.csv 가 있으면 그것이 우선한다.
+        # 한 그릇에 하루 권고량의 절반이 넘는 나트륨이면 알린다.
+        # 신호등(혈당)은 건드리지 않고 문구만 붙인다.
+        caution = r.caution
+        if not caution and ps and ps["sodium"] >= SODIUM_CAUTION_MG:
+            caution = f"나트륨이 한 번에 {ps['sodium']:,}mg 입니다. 혈압이 있으시면 주의하세요."
+            sodium_caution_count += 1
+
         foods.append({
             "id": r.id,
             "name": r.name,
@@ -82,12 +116,13 @@ def build(base: Path):
             "group": r.group,
             "method": r.method,
             "category": r.category,
-            "serving": {"label": r.serving_label},
+            "serving": {"label": r.serving_label, "grams": r.serving_grams},
             "nutrients": {
                 "kcal": r.nutrients.kcal, "carb": r.nutrients.carb,
                 "sugar": r.nutrients.sugar, "fiber": r.nutrients.fiber,
-                "fat": r.nutrients.fat,
+                "fat": r.nutrients.fat, "sodium": r.nutrients.sodium,
             },
+            "perServing": ps,
             "gi": {
                 "value": gi_value,
                 "kind": gi_kind,
@@ -95,7 +130,7 @@ def build(base: Path):
             },
             "verdict": {"level": verdict.level, "reason": verdict.reason},
             "source": r.source,
-            "caution": r.caution,
+            "caution": caution,
             "search": {
                 "norm": search_norm(r.name),
                 "chosung": chosung_of(search_norm(r.name)),
@@ -116,6 +151,7 @@ def build(base: Path):
     stats = {
         "filter": filter_stats, "group": group_stats, "gi": gi_stats,
         "level": level_counts, "kind": kind_counts,
+        "sodium_caution": sodium_caution_count,
     }
     return bundle, stats
 
@@ -153,7 +189,11 @@ def main() -> int:
 
     cautions = sum(1 for f in bundle["foods"] if f["caution"])
     extras = sum(1 for f in bundle["foods"] if f["source"])
-    print(f"[보충 레코드] {extras:,}건   [주의 문구] {cautions:,}건")
+    sodium_pct = stats["sodium_caution"] / total * 100
+    print(f"[보충 레코드] {extras:,}건   [주의 문구] {cautions:,}건 "
+          f"(그중 나트륨 자동 생성 {stats['sodium_caution']:,}건, 전체의 {sodium_pct:.1f}%)")
+    if sodium_pct > 5.0:
+        print(f"경고: 나트륨 주의가 전체의 {sodium_pct:.1f}% — SODIUM_CAUTION_MG 를 올리는 것을 검토하세요.")
     print(f"\n파일 크기: {raw_mb:.1f}MB (gzip {gz_mb:.1f}MB) → {out}")
 
     if gz_mb > 3.0:
