@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detailScreen } from '../render.js';
+import { detailScreen, listItem, nutrientTable } from '../render.js';
 
 // Task 11B Step 3: '100g 기준' 은 분량이 아니라 영양성분의 기준량이므로
 // '보통 한 번에' 문구를 달면 안 된다. 실제 분량(grams)이 있을 때만 단다.
@@ -47,4 +47,23 @@ test('빨강 등급이면 실제 분량이 있어도 보통 한 번에 줄이 �
   });
   const html = detailScreen(food, null);
   assert.ok(!html.includes('보통 한 번에'), html);
+});
+
+// Task 11C: 답이 같은 품종을 한 줄로 합친 대표 레코드는 영양성분을 펼쳤을 때
+// 어떤 품종이 합쳐졌는지 보여줘야 한다.
+test('variants 가 2개 이상이면 영양성분 안에 품종 목록이 보인다', () => {
+  const food = base({ display: '찐 감자', variants: ['대지', '수미', '자색'] });
+  const html = nutrientTable(food);
+  assert.ok(html.includes('품종 3종 · 대지, 수미, 자색'), html);
+});
+
+test('variants 가 없으면 품종 줄이 안 나온다', () => {
+  const html = nutrientTable(base());
+  assert.ok(!html.includes('품종'), html);
+});
+
+test('목록 화면(listItem)에는 품종 줄이 나오지 않는다 — 목록은 이미 빽빽하다', () => {
+  const food = base({ variants: ['대지', '수미', '자색'] });
+  const html = listItem(food);
+  assert.ok(!html.includes('품종'), html);
 });

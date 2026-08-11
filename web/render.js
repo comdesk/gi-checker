@@ -236,6 +236,9 @@ export function nutrientTable(food) {
   const origin = [];
   if (food.display && food.display !== food.name) origin.push(`원본 ${esc(food.name)}`);
   if (food.source) origin.push(`출처 ${esc(food.source)}`);
+  if (food.variants && food.variants.length > 1) {
+    origin.push(`품종 ${food.variants.length}종 · ${food.variants.map(esc).join(', ')}`);
+  }
   if (origin.length) body += `<p class="nut-src">${origin.join(' · ')}</p>`;
 
   return `<details class="more">
