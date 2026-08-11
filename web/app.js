@@ -1,17 +1,14 @@
 import { loadFoods, byCategory } from './data.js';
 import { searchFoods } from './search.js';
+import { listItem, matchHint, displayName, esc } from './render.js';
 
 const app = document.getElementById('app');
 const CATEGORIES = [
   ['🥬', '채소'], ['🍎', '과일'], ['🍚', '밥·면·빵'],
   ['🍲', '국·찌개'], ['🍖', '고기·생선'], ['🍪', '간식·음료'],
 ];
-const LEVEL_LABEL = { green: '좋음', amber: '주의', red: '피하기' };
 
 let bundle = null;
-
-const esc = s => String(s).replace(/[&<>"']/g,
-  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ── 즐겨찾기 (localStorage 를 못 쓰면 조용히 비활성) ──
 const FAV_KEY = 'diabetes-food:recent';
@@ -79,9 +76,83 @@ function showHome() {
     el.addEventListener('click', () => showCategory(el.dataset.cat)));
 }
 
-// Task 10, 11 에서 채운다.
-function showList(query) { console.log('showList', query); }
-function showCategory(cat) { console.log('showCategory', cat); }
+function screenTop(title, valueForInput) {
+  return `
+    <header class="brand" style="padding-bottom:14px">
+      <h1 style="font-size:21px">${esc(title)}</h1>
+    </header>
+    <div class="search">
+      <span class="ic" aria-hidden="true">🔍</span>
+      <input id="q" type="search" inputmode="search" autocomplete="off"
+             placeholder="음식 이름을 쳐보세요" aria-label="음식 검색"
+             value="${esc(valueForInput)}">
+      <button class="clear" id="clear" aria-label="지우기">✕</button>
+    </div>`;
+}
+
+function wireSearchBox(currentQuery) {
+  const input = document.getElementById('q');
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (q) showList(q, { keepFocus: true });
+    else showHome();
+  });
+  document.getElementById('clear')?.addEventListener('click', () => showHome());
+  if (currentQuery) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
+function wireItems() {
+  app.querySelectorAll('.item[data-id]').forEach(el =>
+    el.addEventListener('click', () => showDetail(el.dataset.id)));
+}
+
+function showList(query, { keepFocus = false } = {}) {
+  const hits = searchFoods(query, bundle.foods, 50);
+
+  if (hits.length === 0) {
+    app.innerHTML = screenTop('이거 먹어도 돼요?', query) + `
+      <div class="empty">
+        <h2>"${esc(query)}" 을(를) 못 찾았어요</h2>
+        <p>이름을 조금 줄여서 쳐보세요.<br>예: "된장찌개" → "된장"</p>
+        <button class="btn" id="tohome">카테고리에서 찾기</button>
+      </div>`;
+    wireSearchBox(keepFocus ? query : '');
+    document.getElementById('tohome').addEventListener('click', () => showHome());
+    return;
+  }
+
+  const hint = matchHint(hits[0].kind, hits[0].food);
+  app.innerHTML = screenTop('이거 먹어도 돼요?', query)
+    + (hint ? `<p class="hint">${hint}</p>` : '')
+    + `<p class="cnt">${hits.length}개</p>`
+    + `<div class="list">${hits.map(h => listItem(h.food)).join('')}</div>`;
+
+  wireSearchBox(keepFocus ? query : '');
+  wireItems();
+}
+
+function showCategory(category) {
+  const foods = byCategory(bundle, category)
+    .sort((a, b) => {
+      const [x, y] = [displayName(a), displayName(b)];
+      return x.length - y.length || x.localeCompare(y, 'ko');
+    })
+    .slice(0, 200);
+
+  app.innerHTML = `
+    <button class="nav" id="back"><span class="back">‹</span> 처음으로</button>
+    <header class="brand" style="padding-top:0"><h1>${esc(category)}</h1></header>
+    <p class="cnt">${foods.length}개</p>
+    <div class="list">${foods.map(listItem).join('')}</div>`;
+
+  document.getElementById('back').addEventListener('click', () => showHome());
+  wireItems();
+}
+
+// Task 11 에서 채운다.
 function showDetail(id) { console.log('showDetail', id); }
 
 // ── 시작 ──
