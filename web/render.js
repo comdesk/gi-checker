@@ -74,3 +74,155 @@ export function matchHint(kind, food) {
   if (kind === 'fuzzy') return `비슷한 이름으로 찾았어요 · "${esc(displayName(food))}"`;
   return '';
 }
+
+const GI_TAG = { measured: '실측', estimated: '추정' };
+
+/** 0~100 눈금. 초록 0-55, 노랑 56-69, 빨강 70-100 구간에 현재 값을 찍는다. */
+export function giMeter(food) {
+  const { level } = food.verdict;
+  const { value, kind, basis } = food.gi;
+
+  if (value == null) {
+    const message = kind === 'na'
+      ? '탄수화물이 적어 GI 가 성립하지 않습니다'
+      : 'GI 자료가 없어 영양성분으로 판정했습니다';
+    return `<div class="gi-box">
+      <div class="gi-top"><span class="gi-l">GI 지수</span>
+        <span class="gi-v"><span class="gi-n" style="color:var(--ink3)">—</span></span></div>
+      <p class="gi-none">${message}</p></div>`;
+  }
+
+  const pos = Math.max(0, Math.min(100, value));
+  const tag = GI_TAG[kind] ?? '';
+  const basisText = kind === 'estimated' && basis ? ` · ${esc(basis)}` : '';
+
+  return `<div class="gi-box">
+    <div class="gi-top">
+      <span class="gi-l">GI 지수</span>
+      <span class="gi-v">
+        <span class="gi-n" style="color:var(--${level}-ink)">${kind === 'estimated' ? '약 ' : ''}${value}</span>
+        <span class="gi-tag">${tag}${basisText}</span>
+      </span>
+    </div>
+    <div class="track">
+      <i style="width:55%;background:var(--green-soft)"></i>
+      <i style="width:15%;background:var(--amber-soft)"></i>
+      <i style="width:30%;background:var(--red-soft)"></i>
+      <span class="mark" style="left:${pos}%;border-color:var(--${level})"></span>
+    </div>
+    <div class="scale"><span>0</span><span>55</span><span>70</span><span>100</span></div>
+  </div>`;
+}
+
+/** 조리법 비교. 항목이 2개 미만이면 섹션을 내보내지 않는다. */
+export function waysList(food, members) {
+  if (!members || members.length < 2) return '';
+
+  const heading = food.verdict.level === 'red'
+    ? `같은 ${esc(food.group)}라도 이렇게 드세요`
+    : '조리법에 따라 이렇게 달라져요';
+
+  const rows = members.slice(0, 5).map(m => {
+    const level = m.verdict.level;
+    const isNow = m.id === food.id;
+    const label = esc(m.method ?? displayName(m));
+    const gi = m.gi.value == null
+      ? `<span class="g" style="color:var(--ink3);font-size:15px">—</span>`
+      : `<span class="g" style="color:var(--${level}-ink)">${m.gi.value}</span>`;
+    return `<button class="way${isNow ? ' now' : ''}" data-id="${esc(m.id)}">
+      <span class="d" style="background:var(--${level})"></span>
+      <span class="w">${label}${isNow ? '<span class="badge">지금 보는 것</span>' : ''}</span>
+      ${gi}
+      <span class="s" style="color:var(--${level})">${LEVEL_LABEL[level]}</span>
+    </button>`;
+  }).join('');
+
+  return `<section class="sec">
+    <h2 class="sec-h">${heading}</h2>
+    <div class="ways">${rows}</div>
+  </section>`;
+}
+
+/** 신호등과 무관한 별도 경고. 있을 때만 눈에 띄게 보여준다. */
+export function cautionBlock(food) {
+  if (!food.caution) return '';
+  return `<div class="caution" role="note">
+    <span class="caution-ic" aria-hidden="true">⚠</span>
+    <p>${esc(food.caution)}</p>
+  </div>`;
+}
+
+const NUT_ROWS = [
+  ['열량', 'kcal', 'kcal'],
+  ['탄수화물', 'carb', 'g'],
+  ['당류', 'sugar', 'g'],
+  ['식이섬유', 'fiber', 'g'],
+  ['지방', 'fat', 'g'],
+  ['나트륨', 'sodium', 'mg'],
+];
+
+function nutRows(n) {
+  return NUT_ROWS.map(([label, key, unit]) => {
+    // null 은 '모름'이다. 0 으로 표시하면 거짓말이 된다.
+    const v = n[key];
+    const shown = v == null ? '정보 없음' : `${v}${unit}`;
+    const dim = v == null ? ' style="color:var(--ink3);font-weight:600"' : '';
+    return `<div><span>${label}</span><span${dim}>${shown}</span></div>`;
+  }).join('');
+}
+
+/**
+ * 영양성분. 100g 기준과 실제 분량 기준을 **상자로 갈라서** 보여준다.
+ * 두 기준을 섞어 보여주면 사용자가 몇 배씩 잘못 읽는다 (실제로 겪은 문제).
+ */
+export function nutrientTable(food) {
+  const base = food.serving.label.endsWith('기준') ? food.serving.label : '100g 기준';
+  let body = `<div class="nut-group">
+      <p class="nut-h">${esc(base)}</p>
+      ${nutRows(food.nutrients)}
+    </div>`;
+
+  if (food.perServing) {
+    body += `<div class="nut-group">
+      <p class="nut-h">한 번에 먹는 양 ${esc(food.serving.label)} 기준</p>
+      ${nutRows(food.perServing)}
+    </div>`;
+  } else if (food.serving.isPackage) {
+    body += `<p class="nut-note">포장 전체 ${esc(food.serving.label)} 기준이라
+      한 사람이 한 번에 먹는 양이 아닙니다.</p>`;
+  }
+
+  const origin = [];
+  if (food.display && food.display !== food.name) origin.push(`원본 ${esc(food.name)}`);
+  if (food.source) origin.push(`출처 ${esc(food.source)}`);
+  if (origin.length) body += `<p class="nut-src">${origin.join(' · ')}</p>`;
+
+  return `<details class="more">
+    <summary>영양성분 자세히 보기 ⌄</summary>
+    <div class="nut">${body}</div>
+  </details>`;
+}
+
+export function detailScreen(food, members) {
+  const level = food.verdict.level;
+  // 빨강에는 권장량 줄을 내보내지 않는다 (설계 5.2).
+  const servingLine = level === 'red' || food.serving.isPackage ? ''
+    : `<p class="fact">보통 한 번에 <b>${esc(food.serving.label)}</b></p>`;
+
+  return `
+    <button class="nav" id="back"><span class="back">‹</span> ${esc(food.group ?? '검색으로')}</button>
+    <div class="accent" style="background:var(--${level})"></div>
+    <div class="head">
+      <h1 class="name">${esc(displayName(food))}</h1>
+      <span class="pill" style="background:var(--${level}-tint);
+            border-color:var(--${level}-soft);color:var(--${level}-ink)">
+        <span class="dot" style="background:var(--${level})"></span>${PILL_TEXT[level]}
+      </span>
+      <p class="say">${verdictLine(food)}</p>
+    </div>
+    ${cautionBlock(food)}
+    ${giMeter(food)}
+    ${waysList(food, members)}
+    ${servingLine}
+    ${nutrientTable(food)}`;
+}

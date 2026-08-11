@@ -1,6 +1,6 @@
-import { loadFoods, byCategory } from './data.js';
+import { loadFoods, byCategory, foodById, groupMembers } from './data.js';
 import { searchFoods } from './search.js';
-import { listItem, matchHint, displayName, esc } from './render.js';
+import { listItem, matchHint, displayName, detailScreen, esc } from './render.js';
 
 const shell = document.getElementById('shell');
 const title = document.getElementById('title');
@@ -16,6 +16,7 @@ const CATEGORIES = [
 ];
 
 let bundle = null;
+let lastQuery = null; // 상세에서 뒤로 갈 때 검색 결과로 돌아가기 위해 기억한다.
 
 // ── 즐겨찾기 (localStorage 를 못 쓰면 조용히 비활성) ──
 const FAV_KEY = 'diabetes-food:recent';
@@ -60,6 +61,7 @@ function showHome() {
   subtitle.classList.remove('hidden');
   title.textContent = '이거 먹어도 돼요?';
   input.value = '';
+  lastQuery = null;
 
   const recent = readRecent()
     .map(id => bundle.foods.find(f => f.id === id))
@@ -105,6 +107,7 @@ function showList(query) {
   clearBtn.classList.remove('hidden');
   subtitle.classList.add('hidden');
   title.textContent = '이거 먹어도 돼요?';
+  lastQuery = query;
 
   const hits = searchFoods(query, bundle.foods, 50);
 
@@ -152,8 +155,22 @@ function showCategory(category) {
   window.scrollTo(0, 0);
 }
 
-// Task 11 에서 채운다.
-function showDetail(id) { console.log('showDetail', id); }
+// ── 상세 화면 ──
+function showDetail(id) {
+  const food = foodById(bundle, id);
+  if (!food) { showHome(); return; }
+
+  pushRecent(id);
+  shell.classList.add('hidden');          // 상세에서는 검색창을 감춘다
+  searchBox.classList.add('hidden');      // DOM 에서 제거하지 않는다 (조합 상태 보존)
+  screen.innerHTML = detailScreen(food, groupMembers(bundle, food));
+  window.scrollTo(0, 0);
+
+  document.getElementById('back').addEventListener('click', () =>
+    lastQuery ? showList(lastQuery) : showHome());
+  screen.querySelectorAll('.way[data-id]').forEach(el =>
+    el.addEventListener('click', () => showDetail(el.dataset.id)));
+}
 
 // ── 시작 ──
 async function start() {
