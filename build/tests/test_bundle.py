@@ -10,6 +10,7 @@ BUILD = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BUILD))
 
 from bundle import PACKAGE_GRAMS, PACKAGE_NAME_MARKERS, build, chosung_of, search_aliases, search_norm
+from group import PART_PATTERN
 
 LEVELS = {"green", "amber", "red"}
 KINDS = {"measured", "estimated", "na", "none"}
@@ -218,3 +219,55 @@ def test_아는_음식의_판정이_상식에_맞는다(bundle):
         actual = level_of(display)
         if actual is not None:
             assert actual == expected, f"{display}: {actual} (기대 {expected})"
+
+
+def _part_of(name: str) -> str | None:
+    """group.py 의 부위 판정을 그대로 재사용해, 이름의 부위 표시를 뽑는다."""
+    for seg in (p.strip() for p in name.split("_") if p.strip()):
+        for marker, pattern in PART_PATTERN.items():
+            if pattern.match(seg):
+                return marker
+    return None
+
+
+def test_부위_표시가_다른_음식은_같은_그룹에_섞이지_않는다(bundle):
+    """Task 11B Step 1: 고구마만이 아니라 전체 데이터에서, 부위 표시(줄기·잎·순·싹)가
+    있는 이름과 없는 이름(또는 다른 부위 표시)이 같은 조리법 비교 그룹에 있으면 안 된다.
+
+    group.py 가 부위를 그룹 이름에 붙이는 한 이 테스트는 구성상 항상 통과해야
+    한다 — 그 보장 자체를 회귀 테스트로 고정한다.
+    """
+    by_id = {f["id"]: f for f in bundle["foods"]}
+    offenders = []
+    for gname, ids in bundle["groups"].items():
+        parts = {_part_of(by_id[fid]["name"]) for fid in ids}
+        if len(parts) > 1:
+            offenders.append((gname, parts))
+    assert offenders == [], f"부위가 섞인 그룹: {offenders[:10]}"
+
+
+def test_찐_고구마_중복이_사라졌다(bundle):
+    """Task 11B Step 2: '고구마_찐고구마'(음식.csv) 는 '고구마_찐것'(원재료성) 과
+    같은 음식이라 지워야 한다. 사용자가 검색하면 한 번만 나와야 한다."""
+    names = {f["name"] for f in bundle["foods"]}
+    assert "고구마_찐것" in names
+    assert "고구마_찐고구마" not in names
+
+    displays = [f["display"] for f in bundle["foods"] if "고구마" in f["display"] and "찐" in f["display"]]
+    assert displays.count("찐 고구마") == 1, displays
+
+
+def test_출처_중복_정리는_품종_구분을_남긴다(bundle):
+    """'분질(밤) 고구마'·'점질(호박) 고구마' 처럼 품종을 더하는 이름은
+    중복 정리로 지우면 안 된다."""
+    names = {f["name"] for f in bundle["foods"]}
+    for keep in ("고구마_분질(밤) 고구마_찐것", "고구마_점질(호박) 고구마_찐것"):
+        assert keep in names, f"{keep} 이 중복 정리로 지워졌다"
+
+
+def test_100g_기준뿐이면_실제_분량이_없다(bundle):
+    """serving.label 이 '기준' 으로 끝나기만 하고 grams 를 모르면(원재료성),
+    화면에서 '보통 한 번에' 문구를 달면 안 된다 — render.js 가 이 값으로 판단한다."""
+    for f in bundle["foods"]:
+        if f["serving"]["label"].endswith("기준") and f["serving"]["grams"] is None:
+            assert f["perServing"] is None, f["name"]

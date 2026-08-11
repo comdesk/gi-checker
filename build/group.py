@@ -40,6 +40,40 @@ METHOD_PREFIX = {
 # 일치하는지' 검사할 때 재사용한다 (리뷰 Critical 2).
 METHOD_TOKENS = {word for word, _ in METHOD_WORDS}
 
+# 같은 식물이라도 뿌리와 잎은 전혀 다른 음식이다.
+# 조리법 비교는 같은 부위끼리만 의미가 있다.
+#
+# '껍질'·'내장'·'알'·'씨' 도 부위지만 이번엔 넣지 않는다 — 굴 내장이나 생선 알은
+# 함께 먹는 부위라 분리가 오히려 어색하다. 잎채소로 먹는 줄기·잎·순·싹만 대상이다.
+PART_MARKERS = ("줄기", "잎", "순", "싹")
+
+# 세그먼트가 부위 표시와 '정확히' 일치할 때만 잡는다('_줄기_', '_잎_' 처럼
+# 밑줄 사이에 있을 때). 괄호 설명은 붙어도 된다 — '줄기(껍질 포함)' 도 줄기다.
+#
+# 이렇게 세그먼트 단위·정확 일치로 좁힌 이유: '순'·'싹' 은 짧아서 다른 단어에
+# 걸리기 쉽다. 실제 데이터를 세그먼트 단위로 훑어본 결과(Step 1 검수):
+#   '순' 이 들어간 세그먼트 65건 중 부위 표시로 걸리는 건 21건뿐이었다.
+#   '순대'('순대_간편조리세트_…', '오징어순대' 등, 부위와 무관한 순대 요리)와
+#   '순두부'('순두부찌개_해물' 등)·'순 현미밥'(품종/가공과 무관한 '순수'의 뜻)이
+#   나머지 44건을 차지했는데, 이들은 전부 밑줄로 구분된 세그먼트 전체가 '순'과
+#   일치하지 않아(예: '순두부찌개' != '순') 애초에 걸리지 않았다. 같은 이유로
+#   '싹'도 오탐 없이 10건만 정확히 걸렸다('메밀_싹_생것' 등).
+PART_PATTERN = {m: re.compile(rf"^{re.escape(m)}(\(.*\))?$") for m in PART_MARKERS}
+
+
+def _find_part(name: str) -> str | None:
+    """이름의 밑줄 세그먼트 중 부위 표시가 정확히 있으면 그 부위를 돌려준다.
+
+    '어린잎'·'잎새버섯'·'잎줄기'처럼 다른 글자에 붙어 있으면 잡지 않는다(오탐 방지).
+    첫 세그먼트(대표식품명 자리)도 포함해 전부 검사한다 — 부위 표시가 항상
+    같은 위치에 오지 않는다('두릅_땅두릅_잎_생것'처럼 품종 다음에 오기도 한다).
+    """
+    for part in (p.strip() for p in name.split("_") if p.strip()):
+        for marker, pattern in PART_PATTERN.items():
+            if pattern.match(part):
+                return marker
+    return None
+
 
 def load_manual(path: Path) -> dict[str, tuple[str, str]]:
     with path.open(encoding="utf-8-sig", newline="") as f:
@@ -70,16 +104,24 @@ def _readable(name: str) -> str:
 
 def apply_groups(records, map_path: Path) -> dict[str, int]:
     manual = load_manual(map_path)
-    stats = dict.fromkeys(("조리법있음", "조리법없음", "수동", "단독그룹해제"), 0)
+    stats = dict.fromkeys(("조리법있음", "조리법없음", "수동", "단독그룹해제", "부위분리"), 0)
 
     for r in records:
         if r.name in manual:
+            # 수동 지정은 사람이 이미 판단을 끝낸 예외다 — 부위 분리로 다시
+            # 건드리지 않는다(현재 두 항목 다 부위 표시가 없어 영향은 없지만,
+            # 수동 지정의 우선순위를 지킨다는 원칙을 코드로도 지킨다).
             r.group, r.method = manual[r.name]
             stats["수동"] += 1
         else:
             r.group = r.rep_name
             r.method = _find_method(r.name)
             stats["조리법있음" if r.method else "조리법없음"] += 1
+
+            part = _find_part(r.name)
+            if part:
+                r.group = f"{r.group} {part}"
+                stats["부위분리"] += 1
 
         # 화면용 이름.
         #   '고구마_찐것' (대표식품명 + 조리법뿐) → '찐 고구마'

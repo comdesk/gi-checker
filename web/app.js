@@ -16,7 +16,11 @@ const CATEGORIES = [
 ];
 
 let bundle = null;
-let lastQuery = null; // 상세에서 뒤로 갈 때 검색 결과로 돌아가기 위해 기억한다.
+// 상세에서 뒤로 갈 때 온 곳으로 되돌아가야 한다.
+// 검색으로 왔으면 그 검색 결과로, 카테고리로 왔으면 그 카테고리로.
+// showDetail 은 이 값을 건드리지 않는다 — 조리법 항목을 눌러 상세끼리
+// 이동해도 원래 온 곳을 잊으면 안 된다.
+let lastScreen = { kind: 'home' };   // {kind:'home'} | {kind:'list', query} | {kind:'category', name}
 
 // ── 즐겨찾기 (localStorage 를 못 쓰면 조용히 비활성) ──
 const FAV_KEY = 'diabetes-food:recent';
@@ -61,7 +65,7 @@ function showHome() {
   subtitle.classList.remove('hidden');
   title.textContent = '이거 먹어도 돼요?';
   input.value = '';
-  lastQuery = null;
+  lastScreen = { kind: 'home' };
 
   const recent = readRecent()
     .map(id => bundle.foods.find(f => f.id === id))
@@ -107,7 +111,7 @@ function showList(query) {
   clearBtn.classList.remove('hidden');
   subtitle.classList.add('hidden');
   title.textContent = '이거 먹어도 돼요?';
-  lastQuery = query;
+  lastScreen = { kind: 'list', query };
 
   const hits = searchFoods(query, bundle.foods, 50);
 
@@ -136,6 +140,7 @@ function showList(query) {
 function showCategory(category) {
   shell.classList.add('hidden');
   searchBox.classList.add('hidden');
+  lastScreen = { kind: 'category', name: category };
 
   const foods = byCategory(bundle, category)
     .sort((a, b) => {
@@ -166,8 +171,11 @@ function showDetail(id) {
   screen.innerHTML = detailScreen(food, groupMembers(bundle, food));
   window.scrollTo(0, 0);
 
-  document.getElementById('back').addEventListener('click', () =>
-    lastQuery ? showList(lastQuery) : showHome());
+  document.getElementById('back').addEventListener('click', () => {
+    if (lastScreen.kind === 'list') showList(lastScreen.query);
+    else if (lastScreen.kind === 'category') showCategory(lastScreen.name);
+    else showHome();
+  });
   screen.querySelectorAll('.way[data-id]').forEach(el =>
     el.addEventListener('click', () => showDetail(el.dataset.id)));
 }

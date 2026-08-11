@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from group import METHOD_PREFIX, METHOD_WORDS
 from score import Nutrients
 
 SOURCE_FILES = ("원재료성_농진청.csv", "원재료성_수과원.csv", "음식.csv")
@@ -73,6 +74,7 @@ class FoodRecord:
     alias: list[str] = field(default_factory=list)
     source: str | None = None   # None = 원본 CSV, 문자열 = 보충 레코드 출처
     caution: str | None = None  # 표시용 주의 문구. 신호등 등급은 바꾸지 않는다
+    is_prepared: bool = False   # True = 음식.csv(조리식품) 출처. 원재료성 중복 정리에만 쓴다
 
 
 def _num(value) -> float | None:
@@ -241,6 +243,71 @@ def apply_caution(records: list, path: Path) -> int:
     return applied
 
 
+_METHOD_WORD_TO_METHOD = dict(METHOD_WORDS)
+_METHOD_PREFIX_TO_METHOD = {prefix: method for method, prefix in METHOD_PREFIX.items()}
+
+
+def _informative_method(name: str, rep_name: str) -> str | None:
+    """이름이 '대표식품명_조리법표기' 또는 '대표식품명_접두사대표식품명' 형태뿐이면
+    그 조리법을 돌려준다. 품종 등 정보가 더 있으면 None — 그런 이름은 절대
+    중복으로 보면 안 된다.
+
+    '고구마_찐것' -> 찌기 (원재료성 쪽의 '단순형')
+    '고구마_찐고구마' -> 찌기 ('찐'+'고구마' = 접두사+대표식품명, 새 정보 없음)
+    '고구마_분질(밤) 고구마_찐것' -> None (품종이 있다, 조각이 3개)
+    '감자_찐감자' -> 찌기 이지만, 원재료성에 '감자_찐것'(단순형)이 없으므로
+      (품종별 감자만 있다) remove_source_duplicates 에서 짝을 못 찾아 살아남는다.
+    """
+    parts = [p.strip() for p in name.split("_") if p.strip()]
+    if len(parts) != 2 or parts[0] != rep_name:
+        return None
+    second = parts[1]
+    if second in _METHOD_WORD_TO_METHOD:
+        return _METHOD_WORD_TO_METHOD[second]
+    for prefix, method in _METHOD_PREFIX_TO_METHOD.items():
+        if second == f"{prefix}{rep_name}":
+            return method
+    return None
+
+
+def remove_source_duplicates(records: list) -> tuple[list, list]:
+    """같은 음식이 원재료성과 조리식품 양쪽에 있으면 조리식품 쪽을 지운다 (Task 11B Step 2).
+
+    '고구마_찐것'(원재료성_농진청)과 '고구마_찐고구마'(음식.csv, 조리식품)는 서로
+    다른 기관이 잰 같은 음식이다 — 데이터로는 별개지만 사용자에겐 중복이다.
+
+    규칙은 좁게 잡는다: 두 이름 모두 대표식품명+조리법 외에 아무 정보(품종 등)도
+    더하지 않고, 원재료성 쪽에 '대표식품명_조리법표기' 형태의 정확한 짝이 실제로
+    있을 때만 지운다. '고구마 분질(밤) 고구마_찐것' 처럼 품종을 더하는 이름이나,
+    원재료성 쪽에 짝이 되는 단순형이 아예 없는 이름('감자_찐감자' — 원재료성엔
+    품종별 감자만 있다)은 건드리지 않는다. 이 좁은 판단 기준을 실제 데이터에 돌려
+    보면 5,894건 중 1건만 걸린다(고구마_찐고구마) — 3% 상한(약 175건)에 크게
+    못 미친다.
+
+    group.py 의 조리법 표기(METHOD_WORDS/METHOD_PREFIX)를 그대로 쓰지만
+    apply_groups() 의 결과(수동 매핑 포함)는 기다리지 않는다 — 여기서 다루는
+    두 후보 모두 수동 매핑 없이도 자동으로 조리법을 알 수 있는 경우만이라
+    적재 단계(normalize.py)에서 처리해도 결과가 같다.
+    """
+    raw_simple_methods: set[tuple[str, str]] = set()
+    for r in records:
+        if r.is_prepared:
+            continue
+        method = _informative_method(r.name, r.rep_name)
+        if method:
+            raw_simple_methods.add((r.rep_name, method))
+
+    removed, kept = [], []
+    for r in records:
+        if r.is_prepared:
+            method = _informative_method(r.name, r.rep_name)
+            if method and (r.rep_name, method) in raw_simple_methods:
+                removed.append(r)
+                continue
+        kept.append(r)
+    return removed, kept
+
+
 def load_records(raw_dir: Path, allow_path: Path):
     allow = load_allow(allow_path)
     name_fix = load_name_corrections(allow_path.parent / "name_correction.csv")
@@ -248,7 +315,8 @@ def load_records(raw_dir: Path, allow_path: Path):
     item_override = load_item_category_overrides(allow_path.parent / "category_override_item.csv")
     stats = dict.fromkeys(
         ("총건수", "카테고리제외", "상품명제외", "프랜차이즈제외",
-         "영양성분누락", "중복제외", "남은건수", "이름정정", "카테고리정정", "보충", "주의문구"), 0)
+         "영양성분누락", "중복제외", "출처중복제외", "남은건수",
+         "이름정정", "카테고리정정", "보충", "주의문구"), 0)
 
     kept, seen = [], set()
     capped: dict[tuple[str, str], list] = defaultdict(list)
@@ -336,6 +404,7 @@ def load_records(raw_dir: Path, allow_path: Path):
                         fat=round(values["fat"] or 0, 1),
                         sodium=None if values["sodium"] is None else round(values["sodium"], 1),
                     ),
+                    is_prepared=(filename == "음식.csv"),
                 )
 
                 if cap > 0:
@@ -385,6 +454,14 @@ def load_records(raw_dir: Path, allow_path: Path):
             if r.category != target:
                 r.category = target
                 stats["카테고리정정"] += 1
+
+    # 원재료성과 조리식품 양쪽에 있는 같은 음식은 원재료성 쪽만 남긴다.
+    # 지워지는 항목은 전부 출력한다 — 눈으로 검수하기 위함이다 (Task 11B Step 2 #1).
+    dup_removed, kept = remove_source_duplicates(kept)
+    stats["출처중복제외"] = len(dup_removed)
+    for r in dup_removed:
+        print(f"[출처 중복 제거] {r.name} ({r.serving_label}) "
+              f"→ 원재료성 '{r.rep_name}' 쪽만 남김")
 
     # 보충 레코드는 사람이 카테고리를 명시했으므로 다수결 대상이 아니다.
     extras = load_extra_foods(allow_path.parent / "extra_foods.csv",

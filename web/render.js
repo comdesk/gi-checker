@@ -247,7 +247,11 @@ export function nutrientTable(food) {
 export function detailScreen(food, members) {
   const level = food.verdict.level;
   // 빨강에는 권장량 줄을 내보내지 않는다 (설계 5.2).
-  const servingLine = level === 'red' || food.serving.isPackage ? ''
+  // 실제 분량을 아는 음식만 '한 번에' 라고 말할 수 있다.
+  // '100g 기준' 은 분량이 아니라 영양성분의 기준량이므로 그 줄을 내지 않는다
+  // (영양성분 상자 제목이 이미 기준을 밝힌다).
+  const hasRealPortion = food.serving.grams && !food.serving.isPackage;
+  const servingLine = level === 'red' || !hasRealPortion ? ''
     : `<p class="fact">보통 한 번에 <b>${esc(food.serving.label)}</b></p>`;
 
   return `
