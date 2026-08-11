@@ -1,0 +1,7 @@
+requests>=2.31
+openpyxl>=3.1
+pytest>=8.0
+
+# extract_gi.py 전용, 1회성. 산출물 gi_table_raw.csv 를 커밋하므로
+# 이후 빌드에는 필요 없다.
+pypdf>=5.0

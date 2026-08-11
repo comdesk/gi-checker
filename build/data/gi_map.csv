@@ -1,0 +1,155 @@
+﻿key,gi,source,note
+쌀밥,83,"p46 White rice, NS, boiled (China 2005)","백미밥 대표값. 국제표 내 개별 실측 52~96 편차 큼, 동아시아 단립종에 가까운 값 채택"
+현미밥,77,"p44 Brown rice: China 2005 87±2 · Australia(SunRice) 2013 65±4, 78±5 (3건 평균)","인스턴트 현미(88, p48)는 제외하고 일반 취반 3건만 평균"
+보리밥,58,"p38 Barley, pearled (Orzo, Barilla, Italy) 2009 58±8","[재검토] 실제 레코드 7건(쌀보리·누리찰·호강·겉보리·큰알보리1호·흑수청찰·플레인, 모두 rep_name=보리밥)은 전부 품종명뿐 조리법 표기가 없어, 이름만으로는 압맥/할맥 여부를 알 수 없음. 같은 데이터셋의 원물 보리(대표식품명=보리) 쪽엔 겉보리 조곡(생것, 섬유질 19.6g/100g건조)·할맥(17.0g)·압맥(11.0g)·도정 생것(10.9g)이 모두 있어 가공도별 섬유질 구간을 비교할 수 있다. 보리밥 쪽 조리된 섬유질(1.9~4.2g/100g)을 취반 시 수분흡수 배율(쌀밥·현미밥과 같은 방식으로 역산, 약 3~5배)로 나눠 원물 섬유질을 추정하면 9.5~12.8g/100g대로 나와 압맥/도정(10.9~11.0g)과 거의 일치하고, 할맥(17.0g)·조곡(19.6g)과는 어긋난다(그 경우 배율이 6~7배로 튀어 다른 곡물과 패턴이 안 맞음). 즉 이 데이터셋의 보리밥은 도정(=pearled급) 처리 보리로 지은 밥일 가능성이 높다 — pearled 값(58) 유지. PDF에 'Barley (mean of 20 foods) = 30'(p38) 이라는 대표값이 있지만 채택하지 않음: 이 평균은 보리빵·보리 시리얼바·보리 파스타(GI 44~71)까지 섞은 20건의 평균이라 '밥처럼 지어 먹는 보리'라는 단일 식품형태를 대표하지 못함(식빵/감자삶기 등에서 쓰는 mean 과는 성격이 다름). 통보리 삶은것(35, 33, pot barley — 도정 안 한 hulled barley)은 섬유질 역산 결과와 안 맞아 제외."
+찹쌀밥,88,"p47-48 Sticky rice (China 2005): 682=87±2, 683=88±2 (개별 실측 50~92 중 중앙값권)",찰기 있는 찹쌀 취반. 연구 간 50~92로 편차 크며 중앙값권 채택
+귀리,50,"p31 Porridge, steel-cut oats, cooked: Australia 2003 48±5 · USA 2003 52±4 (2건 평균)","누른/압착 오트밀이 아닌 스틸컷 오트밀 기준(즉석 오트밀은 83~87로 더 높음, 제외)"
+식빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",PDF 요약행. 통밀식빵 등 변종도 같은 rep_name 을 공유해 이 값을 받는다(안전한 방향: 통밀은 실제보다 약간 높게 표시됨)
+국수 삶기,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",밀가루국수(소면/중면/칼국수/우동 등 삶은 것) 대표값
+메밀국수,59,p101 Buckwheat noodles (China 2005) 59±1,
+당면 삶기,14,"p101 Noodles, potato (China 2005) 14±1 — 감자/고구마 전분국수 실측치",당면(고구마 전분국수)의 가장 가까운 실측 유사품. 저항전분 특성상 매우 낮은 GI
+스파게티,47,"p100 White spaghetti, boiled, mean of 11 foods = 47","일반 스파게티/파스타 요리 대표값(소스 유무 무관하게 적용, 소스의 지방·단백질은 보통 GI를 낮추는 방향이라 과대평가 쪽으로 안전)"
+파스타 삶기,47,"p100 White spaghetti, boiled, mean of 11 foods = 47",마카로니 등 삶은 파스타류. 스파게티와 동일값 사용
+도넛,75,p6 Doughnut (Oman 2020) 75±3,
+와플,55,"p63 Waffle cone (Wendy's Supa Sundaes, Australia 2006) 55±6",와플콘 실측값. 일반 와플과 반죽 배합이 유사해 근사치로 사용
+머핀,53,"p4 Muffins, mean of 13 foods = 53",
+시리얼,80,"p27 Cornflakes, mean of 10 foods = 80",콘플레이크 기준 대표값. 그래놀라/뮤즐리 등은 더 낮음(53~55)이나 가장 대중적인 시리얼 기준 채택
+비스킷/쿠키/크래커,51,p58 Cracker (France 2019) 851=51±4,크래커 대표값. 쿠키/과자 종류에 따라 22~91로 편차 매우 큼 — 참고용으로만 사용 권장
+감자 삶기,73,"p123 Boiled potato, mean of 29 studies = 73",
+감자 굽기,88,"p121 Pontiac potato, peeled, baked (Australia 1998) 93±11 · p121 Irish potato, peeled, baked (Jamaica 2005) 83±6 (2건 평균)",
+감자 찌기,62,"p125 Potato, NS, steamed (China 2005) 1873=62±2",
+고구마 삶기,46,"p127 Boiled sweet potato, mean of 13 studies = 46",
+고구마 굽기,88,"p126 Roasted sweet potato, mean of 11 studies = 88 (p128 에 86 으로 재확인됨)",
+고구마 튀기기,71,"p128 Fried sweet potato, mean of 11 studies = 71",
+고구마 찌기,60,"국제 GI 데이터베이스 통용값(찐 고구마는 삶은 것 46과 구운 것 88 사이, 습식가열이라 삶은 것에 더 가깝다고 보고됨)",PDF 미확인 — 'sweet potato steamed'/'steamed' 로 재검색해도 찐 고구마 실측치가 없다. 자체 판단으로 채운 값
+옥수수,53,"p39 Sweet corn, cooked in microwave (Australia 2015) 558=51±4 · p39 Sweet corn, cooked (China 2005) 559=55±2 (2건 평균)",삶기/찌기/생것 등 조리법 무관 동일 적용(단맛 옥수수 기준)
+호박_단호박_찐것,59,"p120 Butternut pumpkin, boiled (Australia 2006) 1799=51±6 · p120 Pumpkin(Cucurbita moschata), boiled (Jamaica 2005) 1800=66±4 (2건 평균)",찐 단호박 실측치가 없어 서양호박(근연종) 삶은 값을 대체 사용. 식품명 단위로만 적용해 애호박/늙은호박 등 다른 호박류에 영향 없음
+사과,44,"p73 Apples, raw (Australia 2020) 1078=44±5",
+사과 말리기,36,"p73 Apple, dried (Australia 1998) 1081=29±5 · Apples, dried (China 2018) 1082=43±4 (2건 평균)",
+배,33,"p78 Pear, Williams, raw, ripe/soft (Australia 2015) 1161=33±4",덜 익은 배(24±3)는 일반적 식용 상태가 아니라 제외
+바나나,47,"p73 Banana, raw (Australia 2008) 1088=47±5","과숙 바나나는 57로 더 높음(제외, 일반적으로 안 익은~적당히 익은 상태 기준)"
+바나나 말리기,44,"p103 Banana chips, dried banana pieces (Australia 2009) 1518=44±5",
+포도,54,"p76 Grapes, Crimson seedless 1133=50±3 · green Menindee seedless 1134=54±4 · black Waltham Cross 1135=59±5 (3건 평균)",
+포도 말리기,55,[재검색] p79 Raisins: Sun Maid USA 2013 1170=49±4 · Canada 2018 1171=55±5 · China 2018 1172=56±5 · USA 2009 1173=61±4 (4건 평균),'Raisin' 검색으로 발견. 기존 자체지식값(64)을 PDF 실측 평균(55)으로 교체
+수박,50,"p77 Watermelon, raw (Malaysia): 1145=55±3, 1146=48±1, 1147=51±2, 1148=47±2 (4건 평균)",
+참외,60,"p77 Melon (Cucumis melo, Italy 2004) 1144=60±9",참외와 동일 종(Cucumis melo)인 유럽산 멜론 실측값. 품종은 다름
+딸기,40,국제 GI 데이터베이스 통용값(딸기는 여러 문헌에서 40 전후 낮은 GI로 일치),PDF 미확인 — 'Strawberry' 로 재검색해도 생딸기 단독 실측치는 없고 요거트/잼/스무디 등 가공품 14건만 있음
+딸기 말리기,55,국제 GI 데이터베이스 통용값(건조과일은 당분 농축으로 생과일보다 GI가 높아지는 경향),PDF 미확인 — 'Strawberry' 재검색으로도 건조딸기 실측치 없음. 생딸기 값(40)을 그대로 쓰면 과소평가 위험이 있어 별도 값 사용
+감,61,"p78 Persimmon (Diospyros kaki, Italy 2004) 1163=61±8",
+곶감,60,"국제 GI 데이터베이스 통용값(건조 과일 계열의 일반적 패턴 — 사과/살구 건조 시 30대, 대추야자 건조 시 50대 중반)","PDF 미확인 — 'Persimmon' 재검색 결과 p78 생감 실측치(감 항목에 이미 사용) 1건뿐, 건조 감 실측치는 없음. 확신도 낮음"
+귤,52,"p77 Mandarin orange (Citrus reticulata, Italy 2004) 1140=52±8",
+귤 착즙,41,p81 Orange juice (New Zealand 2019) 1196=41±3,감귤류 착즙의 근사치로 오렌지주스 실측값 사용(귤 착즙 자체 실측치 없음)
+오렌지,45,"p78 Oranges, navel (Australia 2020) 1150=45±5",
+살구,38,"p73 Apricots, raw, NS: Australia 2007 1083=34±3 · Canada 2018 1084=42±5 (2건 평균)",
+살구 말리기,44,"p73 Apricots, dried, ready to eat 1086=32±7 · Apricots, dried (China 2018) 1087=56±4 (2건 평균)","[Important 2 반영] 두 실측치 편차가 32~56 으로 크다 — ready-to-eat 은 수분이 남아있어 낮고, 완전 건조품은 56 으로 이미 노랑 경계. 중간값 채택했으나 China 값(56)이 실제에 더 가까울 수 있어 검토 시 참고"
+키위,52,국제 GI 데이터베이스 통용값(키위는 여러 문헌에서 50대 초중반으로 보고),PDF 미확인 — 'Kiwi'/'Kiwifruit' 재검색 결과 0건
+파인애플,82,"p79 Pineapple, raw (Ananas comosus, Malaysia 2008) 1164=82±4","국제 문헌상 파인애플 GI는 60대로도 보고되나, 이 값은 PDF 실측치"
+망고,48,"p77 Mango, raw (Chin-Hwang Mango, Taiwan 2010) 1142=48±0.3",
+우유,30,"p64 Milk, reduced fat (Australia 2006) 942=26±6 · Milk, semi-skimmed (UK 2005) 943=34±8 (2건 평균)",가당 딸기우유 등도 같은 rep_name 을 공유해 이 값을 받음(이 표의 가당 플레이버 우유 실측치도 26~31로 유사해 큰 오차 아님)
+두유 카페라떼,31,"p72 Soy milk reduced-fat, mean of 4 studies = 31",순수 두유 실측 대표값 사용(카페라떼향 첨가가 GI에 큰 영향 없다고 가정)
+요구르트(액상),33,"p70 All Yoghurts, mean of 72 studies = 33",
+아이스크림,36,"p62 Ice-cream, reduced- or low-fat, mean of 17 foods = 36",일반(고지방) 아이스크림도 지방 함량이 높아 GI가 비슷하거나 더 낮은 경향으로 알려져 있어 안전한 방향의 근사치
+콩(대두) 삶기,20,국제 GI 데이터베이스 통용값(삶은 대두는 여러 문헌에서 15~20대로 매우 일관되게 낮음),PDF 미확인 — 'Soybean'/'Soya bean'/'Soy bean' 재검색 결과 순수 대두 단독 실측치 없음(대두유·대두가루 조합 요리만 3건)
+팥 삶기,29,국제 GI 데이터베이스 통용값(삶은 팥/붉은강낭콩류는 여러 문헌에서 20대 중후반으로 일관됨),PDF 미확인 — 'Azuki'/'Adzuki'/'Red bean' 재검색 결과 0건
+강낭콩 삶기,27,국제 GI 데이터베이스 통용값(삶은 강낭콩은 여러 문헌에서 20대 중후반으로 매우 일관됨),PDF 미확인 — 'Kidney bean'/'Red kidney' 재검색 결과 0건
+병아리콩,28,"국제 GI 데이터베이스 통용값(삶은 병아리콩은 여러 문헌에서 20대 후반으로 보고)","[재검토] PDF 유일 병아리콩 실측치는 p87 Chickpeas, dried, roasted ('chicknuts', Crete 2006) 1286=39±4 뿐인데 이건 '구운 스낵' 형태. 이 데이터셋의 병아리콩 레코드는 말린것(원물)·삶은것 2건뿐이라 로스팅 스낵과 조리법이 달라 규칙3 위반(브랜드/가공품이 한국에서 먹는 형태와 불일치). 이 표에 삶은 병아리콩 실측치가 따로 없어, 같은 파일에서 실측 없는 삶은 콩류에 쓰는 방식(팥 삶기 29, 강낭콩 삶기 27, 렌즈콩 32)과 동일하게 국제 GI 통용값으로 대체. 등급은 39든 28이든 green 으로 동일(변화 없음), 근거 정합성만 바로잡음"
+렌즈콩(렌틸콩),32,국제 GI 데이터베이스 통용값(렌틸콩은 여러 문헌에서 20~30대로 매우 일관되게 낮음),PDF 미확인 — 'Lentil' 재검색 결과 0건
+땅콩 볶기,14,국제 GI 데이터베이스 통용값(볶은 땅콩은 여러 문헌에서 14 전후로 매우 일관됨),PDF 미확인 — 'Peanut' 재검색 결과 순수 땅콩 단독 실측치 없음(땅콩버터바 등 가공품 6건뿐)
+밤,60,국제 GI 데이터베이스 통용값(밤은 삶기/굽기 모두 대체로 60 전후로 보고),PDF 미확인 — 'Chestnut' 재검색 결과 0건. 아몬드/호두와 달리 탄수화물 함량이 높아 GI 관리가 필요
+당근 데치기,32,"p121 Carrots, unpeeled, boiled (Australia 2020) 1804=32±4 · Carrots, diced, frozen (New Zealand 2011) 1805=31±2 (2건 평균)",데친 것 실측치가 없어 삶은 것(boiled) 값을 대체 사용 — 조리법이 유사해 근사치로 사용
+당근 생것,16,국제 GI 데이터베이스 통용값(생당근은 여러 구판 국제 GI표에서 일관되게 10대 후반으로 매우 낮게 보고),PDF 미확인 — 'Carrot' 재검색 결과 생당근 단독 실측치 없음(당근케이크·당근주스·삶은당근만 있음). 삶은 것과 값이 크게 달라 조리법(생것)으로 좁혀 키를 만듦
+초콜릿,49,"p108 Chocolate, milk, NS (China 2005) 1597=49±3",
+케이크,53,p2 Christmas fruit cake (Australia 2009) 5=53±3,
+파운드케이크,38,"p2 Pound cake 0% (Bimbo S.A de C.V, Mexico 2006) 8=38±5",
+핫케이크,46,"p5 Pancakes, prepared with wheat flour and coconut flour (Philippines 2002) 51=46±2",코코넛가루 배합 포함. 밀가루 팬케이크류 중 중간값 채택(다른 연구는 80까지도 보고)
+카스텔라,50,국제 GI 데이터베이스 통용값(스펀지케이크류는 대체로 46~60 범위로 보고),PDF 미확인 — 'Sponge cake' 재검색 결과 0건
+꿀,60,"p118 Honey, mean of 17 types of honey = 60",
+설탕,60,"p118 Sucrose, cane sugar (Australia 2016) 1769=60±4",다른 자당(수크로스) 실측치들도 59~66 범위로 일관됨
+포도당,100,정의: 포도당(글루코스) 자체가 GI 기준물질(Glu=100),
+당밀,55,국제 GI 데이터베이스 통용값(당밀은 정제설탕보다 낮은 50대 중반으로 다수 보고),PDF 미확인 — 'Molasses' 재검색 결과 0건
+젤리,76,"p110 Sour Straws, strawberry flavor, gummy/chewy confectionery (Australia 2017) 1635=76±7",
+프레즐,73,"p15 Soft pretzel, wheat (USA 2011) 208=66±4 · Soft pretzel (Ditsch, Mainz, Germany 2014) 209=80±6 (2건 평균)","[재검토] 기존엔 Ditsch(독일 브랜드) 한 건만 썼으나, 같은 p15에 밀가루 기반 'Soft pretzel, wheat' 66 도 있어 함께 평균(같은 형태 — 소프트 프레즐, 밀가루 기반). 'Soft pretzel, soy' 39 는 대두 기반으로 식품 형태가 달라 제외. 평균으로 73 이 되어도 등급은 기존과 동일(red, 둘 다 55 초과)"
+크로와상,56,"[재검색] p3 Croissant, all butter (Coles Supermarkets, Australia 2013) 22=45±6 · Croissant (Oman 2020) 23=67±2 (2건 평균)",'Croissant' 검색으로 발견. 기존 자체지식값(67)을 PDF 실측 평균(56)으로 교체. 두 값 편차(45~67)가 커 검토 시 참고
+호밀빵,60,"p16 Rye breads, mean of 13 foods = 60",
+바게트,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵과 동일한 흰 밀가루빵 대표값 재사용
+모닝빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+롤빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+소금빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+버터빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+마늘빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+소세지빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용(짭짤한 빵)
+피자빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+치즈빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+효모빵,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+토스트,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵과 동일 값(굽는다고 GI가 크게 변하지 않음)
+토스트(식빵),73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵과 동일 값
+베이글,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용(베이글은 밀도가 높아 실제로는 더 낮을 수 있음 — 안전한 방향의 근사치)
+치아바타,73,"p19 White wheat flour bread, mean of 35 foods = 73",식빵 대표값 재사용
+냉면,59,p101 Buckwheat noodles (China 2005) 59±1,메밀국수와 동일 값 재사용
+물냉면,59,p101 Buckwheat noodles (China 2005) 59±1,메밀국수와 동일 값 재사용
+회냉면,59,p101 Buckwheat noodles (China 2005) 59±1,메밀국수와 동일 값 재사용
+막국수,59,p101 Buckwheat noodles (China 2005) 59±1,메밀국수와 동일 값 재사용
+메밀소바,59,p101 Buckwheat noodles (China 2005) 59±1,메밀국수와 동일 값 재사용
+메밀 냉면,59,p101 Buckwheat noodles (China 2005) 59±1,메밀국수와 동일 값 재사용
+메밀 국수,59,p101 Buckwheat noodles (China 2005) 59±1,표기(공백) 차이만 있는 동일 항목
+모밀국수,59,p101 Buckwheat noodles (China 2005) 59±1,메밀국수의 다른 표기
+우동,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",밀가루국수 대표값 재사용
+잔치국수,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",밀가루국수 대표값 재사용
+칼국수,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",밀가루국수 대표값 재사용
+수제비,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",밀가루 반죽 국물요리 — 국수 대표값 재사용
+쫄면,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",밀가루국수 대표값 재사용
+콩국수,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 자체 기준값(콩국물은 반영하지 않음)
+자장면,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값(소스는 반영하지 않음 — 지방 함유로 실제로는 더 낮을 수 있어 안전한 방향)
+짬뽕,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값(국물·건더기는 반영하지 않음)
+비빔국수,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값 재사용
+밀면,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값 재사용
+올갱이국수,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값 재사용
+쟁반국수,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값 재사용
+쟁반짜장,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값 재사용
+볶음면,46,"p102 Wheat noodle, dried, boiled (China 2005) 46±2",면 기준값 재사용
+멥쌀 국수,51,"p99 Rice noodles, dried, boiled (Thailand 2000) 1463=61±6 · freshly made, boiled (Australia 2000) 1464=40±4 (2건 평균)",
+맵쌀 국수,51,"p99 Rice noodles, dried, boiled (Thailand 2000) 1463=61±6 · freshly made, boiled (Australia 2000) 1464=40±4 (2건 평균)",표기(오타) 차이만 있는 동일 항목
+쌀국수,51,"p99 Rice noodles, dried, boiled (Thailand 2000) 1463=61±6 · freshly made, boiled (Australia 2000) 1464=40±4 (2건 평균)",
+멥쌀,83,"p46 White rice, NS, boiled (China 2005)",쌀밥과 동일 값 재사용
+찹쌀,88,"p47-48 Sticky rice (China 2005): 682=87±2, 683=88±2",찹쌀밥과 동일 값 재사용
+보리,58,"p38 Barley, pearled (Orzo, Barilla, Italy) 2009 58±8","보리밥과 동일 값 재사용(근거는 보리밥 행 참고). [재검토 시 확인된 한계, 미수정] 이 키는 대표식품명=보리인 레코드 전부(가루낸 보리·볶은 보리·엿기름 말린것·보리순 등)에 gi_match.py 1단계(대표식품명 정확매칭)로 그대로 적용된다 — 곡립 형태(도정/압맥)를 벗어난 가루·맥아(엿기름)·새싹(순) 류에도 58이 붙는 셈이라 근거가 약하다. 이 파일(gi_map.csv) 수정만으로는 방법(조리법)별로 못 갈라 해결이 안 되고 gi_match.py(이번 작업 범위 밖)의 도너 선택 로직을 바꿔야 한다. 각 형태에 맞는 PDF 실측치도 없어 손대지 않음 — 다음 리뷰에서 별도로 다룰 것"
+조,64,"p40 Foxtail millet, cooked (China 2016) 563=64±9",
+기장,64,"p40 Foxtail millet, cooked (China 2016) 563=64±9",기장(proso millet) 직접 실측치가 없어 근연 조(foxtail millet) 값을 대체 사용
+밀,42,p49 Whole wheat powder (China 2005) 705=42±2,
+아마란스,35,국제 GI 데이터베이스 통용값(아마란스는 여러 문헌에서 30대 중반으로 보고),PDF 미확인 — 'Amaranth' 재검색 결과 0건
+퀴노아,53,"p40 (Coles Supermarkets) Quinoa and Brown Rice Cups, microwaved 70 sec (Australia 2013) 53±3",퀴노아·현미 혼합 제품 실측값. 순수 퀴노아 단독 실측치는 이 표에 없음
+흑미밥,55,국제 GI 데이터베이스 통용값(흑미는 백미보다 낮고 현미와 비슷한 50대 중반으로 다수 보고),"PDF 미확인 — 'Black rice' 재검색 결과 'Rice porridge, made from black rice' GI=42(p46) 1건 발견했으나 죽(포리지) 형태라 밥과 조리법이 달라 채택하지 않음"
+쌀죽(흰죽),74,"[재검색] p46 Rice porridge, NS: China 2005 660=66±5, 661=69±6 · Australia 2005 662=88±5 (3건 평균)",'Rice porridge' 검색으로 발견. 기존 자체지식값(90)을 PDF 실측 평균(74)으로 교체. 백미밥(83)보다 높다는 방향은 유지됨
+잣죽,74,"[재검색] p46 Rice porridge, NS: China 2005 660=66±5, 661=69±6 · Australia 2005 662=88±5 (3건 평균)",쌀죽(흰죽)과 동일 값 재사용. 잣의 지방이 소폭 낮출 수 있으나 근거 부족으로 보수적으로 동일값 사용
+스무디,34,"p9-10 Smoothie, banana (Australia 2003) 117=30±4 · mango (Australia 2003) 120=32±4 · strawberry and banana (UK 2019) 123=39±4 (3건 평균)",
+딸기바나나 스무디,39,"p10 Smoothie, strawberry and banana (Innocent Ltd., UK 2019) 123=39±4",
+과ㆍ채주스,45,"p81 Orange juice (New Zealand 2019) 1196=41±3 · p80 Apple juice, unsweetened (Australia 2003) 1181=44±3 (평균 근사)",과일·채소 혼합주스의 근사치로 흔한 과일주스 실측값 사용
+밀크쉐이크,35,국제 GI 데이터베이스 통용값(유제품 기반 밀크셰이크는 대체로 30대로 보고),PDF 미확인 — 'Milkshake'/'Milk shake' 재검색 결과 0건
+밀크티,40,국제 GI 데이터베이스 통용값(가당 밀크티류는 대체로 30~40대로 보고),PDF 미확인 — 'Milk tea'/'Bubble tea' 재검색 결과 0건
+밀크티/버블티,40,국제 GI 데이터베이스 통용값(가당 밀크티류는 대체로 30~40대로 보고),"PDF 미확인 — 'Milk tea'/'Bubble tea' 재검색 결과 0건, 타피오카 펄 포함 시 더 높을 수 있음"
+멜론,60,"p77 Melon (Cucumis melo, Italy 2004) 1144=60±9",참외와 동일종(Cucumis melo) 실측값 재사용
+파파야,38,"p78 Papaya/paw paw, raw (Singapore 2017) 1153=38±2",
+구아바,29,"[재검색] p76 Guava, raw, cut into bite size pieces (Singapore 2017) 1131=29±4","'Guava' 검색으로 발견. 기존 자체지식값(24)을 PDF 실측치(29)로 교체. 퓨레 형태는 47 로 더 높음(p76, p82) — 생과일 기준으로 낮은 쪽 채택"
+크랜베리 말리기,62,"[Critical 2 반영/재검색] p74 Cranberries, sweetened, dried (Ocean Spray, USA 2011) 1096=62±6","'Cranberr' 검색으로 발견. 실제 레코드명(크랜베리_말린것에 당류를 가한것, sugar 74.3g)과 영문 원문이 거의 일치 — 기존에 무관한 주스값(52)을 썼던 것을 정정. 생크랜베리는 확신 있는 실측치가 없어 키를 만들지 않음(규칙 3으로 넘어감)"
+자몽(그레이프프루트),25,국제 GI 데이터베이스 통용값(자몽은 여러 문헌에서 20대 중반으로 매우 낮게 일관됨),PDF 미확인 — 'Grapefruit' 재검색 결과 0건
+체리,22,국제 GI 데이터베이스 통용값(체리는 여러 문헌에서 20대 초반으로 매우 낮게 일관됨),"PDF 미확인 — 'Cherry'/'Cherries' 재검색 결과 생체리 실측치는 없음. 'Cherries, sour, pitted, canned' GI=41(p74) 1건 발견했으나 신맛 품종·통조림 가공품이라 한국에서 흔히 먹는 생체리와 다르다고 판단해 채택하지 않음"
+자두 생것,24,국제 GI 데이터베이스 통용값(자두는 여러 문헌에서 20대 중반으로 낮게 일관됨),PDF 미확인 — 'Plum' 재검색 결과 0건. 자두_말린것(sugar 38.1g)이 있어 조리법(생것)으로 좁혀 키를 만듦 — 말린것은 규칙 3으로 넘어감
+무화과 생것,35,국제 GI 데이터베이스 통용값(생무화과는 30대 중반으로 보고),[Critical 3 반영] PDF 미확인 — 'Fig' 재검색 결과 순수 생무화과 실측치 없음(시리얼바 조합 1건뿐). 무화과_수입산_말린것(sugar 58.9g)이 있어 조리법(생것)으로 좁혀 키를 만듦 — 말린것은 키를 만들지 않고 규칙 3으로 넘어감
+완두,29,"[재검색] p120 Peas, plain and frozen (Talleys Group Ltd, New Zealand 2011) 1797=29±2","'Peas, plain' 검색으로 발견. 기존 자체지식값(51)을 PDF 실측치(29)로 교체 — 값이 크게 바뀜"
+블루베리 생것,53,국제 GI 데이터베이스 통용값(블루베리는 50대 초중반으로 보고),"PDF 미확인 — 'Blueberry' 재검색 결과 순수 생블루베리 실측치 없음(요거트 32, 그래놀라 64, 잼 74 등 가공품 3건뿐, 편차가 커 채택 안 함). 블루베리_말린것(sugar 48.3g)이 있어 조리법(생것)으로 좁혀 키를 만듦 — 말린것은 규칙 3으로 넘어감"
+비트,64,국제 GI 데이터베이스 통용값(삶은 비트는 60대 초중반으로 다수 보고),PDF 미확인 — 'Beet'/'Beetroot' 재검색 결과 0건
+토란 삶기,72,"[Critical 1 반영/재검색] p129 Dasheen (Taro), peeled, cubed, boiled 30 min (Jamaica 2005) 1923=72±5","'Dasheen'/'Taro' 검색으로 발견. Dasheen 은 토란(Colocasia esculenta)의 이명. 기존 값(55, PDF 미확인 표시)이 틀렸음 — 조리법(삶기)으로 좁혀 정정, 생것/찐것은 규칙 3으로 넘어감"
+대추야자,53,"p75 Dates, mean of 11 foods = 52 · p76 Dates, dried, mean of 19 foods = 54 (평균)",
+또띠아,49,"[재검색] p24 Tortilla (Diego Tortilla Factory Pty Ltd, Australia 2007) 49±6",'Tortilla' 검색으로 발견. 기존 자체지식값(30)을 PDF 실측치(49)로 교체 — 값이 크게 바뀜
+감말랭이,60,국제 GI 데이터베이스 통용값(건조과일 공통 패턴),"PDF 미확인 — 'Persimmon' 재검색 결과 건조 감 실측치 없음(생감 1건만 존재, 곶감과 동일 논리로 동일 값 사용)"
+대추 말리기,55,"[재검색] p77 Jujubes, dried (Ziziphus jujuba Mill., China 2018) 1137=55±6","'Jujube' 검색으로 발견 — 대추와 학명이 일치하는 정확한 매칭. 기존 자체지식값(50, 대추야자와 혼동 우려)을 PDF 실측치(55)로 교체. 생대추(sugar 24.3g)는 확신 있는 실측치가 없어 키를 만들지 않음 — 규칙 3으로 넘어감"
+양파,10,국제 GI 데이터베이스 통용값(양파는 여러 문헌에서 10 전후로 매우 낮게 일관됨),PDF 미확인 — 'Onion' 재검색 결과 순수 양파 실측치 없음(바스마티 필라프 조합 1건뿐)
+토마토,15,국제 GI 데이터베이스 통용값(토마토는 여러 문헌에서 15 전후로 매우 낮게 일관됨),PDF 미확인 — 'Tomato' 재검색 결과 순수 토마토 실측치 없음(토마토주스·소스 조합 4건뿐)
+브로콜리,15,국제 GI 데이터베이스 통용값(브로콜리는 여러 문헌에서 15 전후로 매우 낮게 일관됨),PDF 미확인 — 'Broccoli' 재검색 결과 0건
+도토리묵,35,국내 영양 문헌 통용값(묵류는 노화된 전분 구조로 GI가 낮다고 알려짐),PDF 미확인 — 'Acorn' 재검색 결과 0건. 확신도 낮음
+메밀묵,35,국내 영양 문헌 통용값(묵류는 노화된 전분 구조로 GI가 낮다고 알려짐),"PDF 미확인 — 'Buckwheat' 재검색 결과 메밀국수 실측치(59, 이미 사용)만 있고 묵(전분젤리) 형태 실측치는 없음. 확신도 낮음"
+청포묵,30,국내 영양 문헌 통용값(녹두전분은 당면과 같은 원리로 GI가 특히 낮다고 알려짐),PDF 미확인 — 'Mung bean' 재검색 결과 볶은/발아/압력조리 녹두 3건(25~53) 발견했으나 전분만 추출한 묵(청포묵)과는 식품 형태가 달라(단백질·섬유 구성비가 다름) 채택하지 않음. 확신도 낮음
+식혜,85,국제 GI 데이터베이스 통용값(엿기름으로 당화한 쌀 음료는 액상+맥아당 특성상 높은 GI로 추정),PDF 미확인 — 'Rice drink'/'Malt' 재검색 결과 없음. 확신도가 낮으나 '부드러운 음료라 안전하다'는 오해를 막기 위해 보수적으로(높게) 채움
+우엉,50,국제 GI 데이터베이스 통용값(우엉/식이섬유가 많은 뿌리채소는 이눌린 함량으로 대체로 40~50대로 보고),PDF 미확인 — 'Burdock' 재검색 결과 0건. 확신도 낮음
+연근,38,국제 GI 데이터베이스 통용값(연근은 아시아권 문헌에서 30대 후반으로 보고되는 경우가 많음),"PDF 미확인 — 'Lotus' 재검색 결과 연근(root) 실측치는 없음('lotus leaf'로 감싼 찹쌀 요리 1건뿐, 무관). 확신도 낮음"
+찹쌀떡,48,"p134 Glutinous rice ball with cut glutinous cake (mochi, Japan 2003) 2013=48±5",이 표에 한국식 떡(멥쌀 가래떡·시루떡 등) 실측치가 없어 조리법이 가장 비슷한 일본 찹쌀떡(모찌)을 대체 사용. 가래떡 등 멥쌀떡은 전분 구조가 달라 이 값을 적용하지 않음(규칙 3으로 넘어감)
