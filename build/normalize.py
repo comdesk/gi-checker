@@ -183,9 +183,10 @@ def load_extra_foods(path: Path, allow_labels: set[str]) -> list[FoodRecord]:
                     raise SystemExit(f"extra_foods.csv:{lineno} '{name}' 의 {key} 가 비어 있습니다")
                 return value
 
-            # 나트륨은 필수가 아니다 — 원본에 없으면 0.0 (모르는 값을 0으로 채운 경우는
-            # extra_foods.csv 의 note 열에 그 사실을 남긴다).
-            sodium = _num(row.get("sodium")) or 0.0
+            # 나트륨은 필수가 아니다 — 원본에 없으면 None(모름). 0으로 채우지 않는다.
+            # 탄수화물을 0으로 채워 허위 초록을 만들었던 실수(Task 3)와 같은 종류의
+            # 실수를 나트륨에서 반복하지 않는다. 0과 모름은 다르다.
+            sodium = _num(row.get("sodium"))
 
             out.append(FoodRecord(
                 id=re.sub(r"[^0-9A-Za-z가-힣+]+", "-", name).strip("-"),
@@ -289,8 +290,10 @@ def load_records(raw_dir: Path, allow_path: Path):
                 values = {k: _num(row[COL[k]])
                           for k in ("kcal", "carb", "sugar", "fiber", "fat", "sodium")}
                 # 탄수화물·열량 둘 중 하나라도 없으면 판정 자체가 불가능하니 제외한다.
-                # (당류·식이섬유·지방·나트륨은 없으면 0으로 채워도 판정에 지장 없음 —
-                #  나트륨은 애초에 판정에 쓰이지도 않는다)
+                # (당류·식이섬유·지방은 없으면 0으로 채워도 판정에 지장 없음.
+                #  나트륨은 판정에 아예 쓰이지 않으므로 0으로 채우지 않고 None(모름)으로
+                #  둔다 — 탄수화물을 0으로 채워 허위 초록을 만들던 실수와 같은 종류를
+                #  반복하지 않는다)
                 if values["carb"] is None or values["kcal"] is None:
                     stats["영양성분누락"] += 1
                     continue
@@ -331,7 +334,7 @@ def load_records(raw_dir: Path, allow_path: Path):
                         sugar=round(values["sugar"] or 0, 1),
                         fiber=round(values["fiber"] or 0, 1),
                         fat=round(values["fat"] or 0, 1),
-                        sodium=round(values["sodium"] or 0, 1),
+                        sodium=None if values["sodium"] is None else round(values["sodium"], 1),
                     ),
                 )
 

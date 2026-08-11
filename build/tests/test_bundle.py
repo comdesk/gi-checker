@@ -9,7 +9,7 @@ import pytest
 BUILD = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BUILD))
 
-from bundle import build, chosung_of, search_aliases, search_norm
+from bundle import PACKAGE_GRAMS, build, chosung_of, search_aliases, search_norm
 
 LEVELS = {"green", "amber", "red"}
 KINDS = {"measured", "estimated", "na", "none"}
@@ -138,8 +138,9 @@ def test_나트륨_주의가_5퍼센트를_넘지_않는다(bundle):
 def test_1회분량_환산이_100g_기준과_일관된다(bundle):
     for f in bundle["foods"]:
         g = f["serving"]["grams"]
+        is_package = f["serving"]["isPackage"]
         ps = f["perServing"]
-        if g is None:
+        if g is None or is_package:
             assert ps is None, f["name"]
             continue
         assert ps is not None, f["name"]
@@ -148,16 +149,43 @@ def test_1회분량_환산이_100g_기준과_일관된다(bundle):
 
 
 def test_나트륨이_모든_레코드에_있다(bundle):
+    """나트륨은 있으면 0 이상, 없으면 None(모름) 이어야 한다. 0 으로 채우면 안 된다."""
     for f in bundle["foods"]:
         assert "sodium" in f["nutrients"]
-        assert f["nutrients"]["sodium"] >= 0
+        s = f["nutrients"]["sodium"]
+        assert s is None or s >= 0, f["name"]
 
 
 def test_판정은_나트륨과_무관하다(bundle):
     """신호등은 혈당만 본다. 나트륨이 높다고 등급이 내려가면 안 된다."""
-    salty = [f for f in bundle["foods"] if f["nutrients"]["sodium"] >= 600]
+    salty = [f for f in bundle["foods"]
+             if f["nutrients"]["sodium"] is not None and f["nutrients"]["sodium"] >= 600]
     assert any(f["verdict"]["level"] == "green" for f in salty), \
         "나트륨 높은 음식이 전부 초록이 아니게 됐다면 판정에 나트륨이 섞인 것"
+
+
+def test_나트륨_주의가_실제로_붙는다(bundle):
+    """상한만 보는 테스트는 기능이 통째로 사라져도 통과한다. 생성 자체를 검증한다."""
+    salty = [f for f in bundle["foods"]
+             if f["caution"] and "나트륨" in f["caution"]]
+    assert len(salty) >= 50, f"나트륨 주의가 {len(salty)}건뿐입니다"
+    # 실제로 짠 음식에 붙었는지도 확인
+    for f in salty[:20]:
+        ps = f["perServing"]
+        assert ps and ps["sodium"] and ps["sodium"] >= 1000, f["display"]
+
+
+def test_포장_전체는_1인분으로_취급하지_않는다(bundle):
+    """PACKAGE_GRAMS 이상은 밀키트 등 포장 전체로 보고 1회 분량 환산·나트륨 주의를 건너뛴다."""
+    found_package = False
+    for f in bundle["foods"]:
+        g = f["serving"]["grams"]
+        if g and g >= PACKAGE_GRAMS:
+            found_package = True
+            assert f["serving"]["isPackage"] is True, f["display"]
+            assert f["perServing"] is None, f["display"]
+            assert not (f["caution"] and "나트륨" in f["caution"]), f["display"]
+    assert found_package, "PACKAGE_GRAMS 이상인 레코드가 하나도 없습니다 — 검증이 공허합니다"
 
 
 def test_아는_음식의_판정이_상식에_맞는다(bundle):
