@@ -22,19 +22,37 @@ PUNCT = re.compile(r"[\s,·()\[\]/\-_.]+")
 # 확인했다(build/tests/test_bundle.py 의 test_나트륨_주의가_5퍼센트를_넘지_않는다 참고).
 SODIUM_CAUTION_MG = 1400
 
-# 1인분으로 보기엔 너무 큰 포장. 이 이상은 perServing(1회 분량) 계산도, 나트륨 주의도
-# 건너뛴다 — "2.3kg 밀키트"를 "한 번에" 먹는 양처럼 보여주면 안 된다.
-# grams 분포를 실측한 결과(정상 케이스 대 '간편조리세트' 케이스를 이름으로 나눠 비교.
-# build/tests/test_bundle.py 의 test_포장_전체는_1인분으로_취급하지_않는다 참고):
-#   - 이번에 문제로 지적된 다섯 예시(간편조리세트, 국·전골류)는 모두 1,138g~2,292g.
-#   - "간편조리세트" 가 아닌 일반 1인분 국물 요리는 1,000g 미만이 압도적으로 많다.
-#   - 1,000g 을 상한으로 잡으면 지적된 다섯 예시를 전부 걸러내면서(가장 작은 것도
-#     1,138g), '삼계탕'·'짬뽕 삼선'처럼 그릇째 무거운 정상 1인분(900g대)은 남긴다.
-#   - 1,000g 근처는 정상 큰 그릇과 밀키트 포장이 실제로 섞여 있어(예: 곰치국·콩국수
-#     같은 정상 1인분도 1,000g대에 소수 존재) 완벽한 경계선은 없다 — grams 만으로
-#     구분하는 한계다. "표시 안 함"이 "틀린 표시"보다 안전하므로 보수적으로 1,000g
-#     을 택한다.
+# 1인분으로 보기엔 너무 큰 포장. 이 이상이면서 밀키트 이름 표시가 있는 경우에만
+# perServing(1회 분량) 계산과 나트륨 주의를 건너뛴다.
+#
+# 처음엔 grams >= PACKAGE_GRAMS 하나만으로 걸렀는데(59건 제외), 그 59건을 전수로
+# 훑어보니 38건만 실제 '간편조리세트'(밀키트)였고 나머지 21건은 해장국_선지·
+# 국밥_돼지고기·짬뽕밥·올갱이국수·닭찜_안동찜닭처럼 원래 국물이 많아 1kg 을 넘는
+# 정상적인 1인분 요리였다 — 하필 나트륨이 제일 걱정되는 음식들이 제외돼버려서
+# 이 기능이 잡으려던 사례를 놓치는 역효과가 났다. 같은 '우동' 그룹 안에서도
+# 700~800g 대가 정상군이고 1,000g '우동 중식/삼선' 은 그 분포의 상단일 뿐이다.
+#
+# 그래서 무게 단독 대신 "무게 + 이름 신호"로 바꿨다. 실측 결과(전체 5,894건 기준):
+#   - "간편조리세트" 는 116건 있고, 그중 grams>=1000 인 것이 정확히 38건이다.
+#     나머지 78건은 이미 1,000g 미만이라 애초에 제외 대상이 아니다.
+#   - "밀키트" 라는 표기는 원본 데이터에 한 건도 없어서(직접 확인) 넣지 않았다 —
+#     있지도 않은 패턴을 넣어봐야 아무것도 못 잡는다.
+#   - "세트"(간편조리세트에 포함되는 부분 문자열이라 별도로 안 셈)·"인분"·"가족"
+#     같은 다른 포장 표기 후보는 전체 데이터에서 0건이라 추가하지 않았다.
+#   - grams 상위 30건을 이름과 함께 눈으로 확인한 결과, '간편조리세트' 가 아니면서
+#     명백히 포장 전체로 보이는 항목은 없었다(올갱이국수 1,500g·닭찜_안동찜닭 1,500g
+#     등은 원래 크게 담아내는 정상 메뉴).
 PACKAGE_GRAMS = 1000
+PACKAGE_NAME_MARKERS = ("간편조리세트",)
+
+
+def is_package(name: str, grams: float | None) -> bool:
+    """포장 전체인가. 무게만으로는 밀키트와 큰 그릇을 못 가른다.
+    해장국·국밥처럼 원래 1kg 넘는 1인분 요리가 있기 때문이다.
+    """
+    if not grams or grams < PACKAGE_GRAMS:
+        return False
+    return any(m in name for m in PACKAGE_NAME_MARKERS)
 
 
 def search_norm(text: str) -> str:
@@ -120,14 +138,15 @@ def build(base: Path):
         if r.nutrients.sodium is None:
             sodium_none_count += 1
 
-        # 1인분으로 보기엔 너무 큰 포장(밀키트 등)은 1회 분량 환산 자체가 의미 없다.
-        is_package = bool(r.serving_grams) and r.serving_grams >= PACKAGE_GRAMS
-        if is_package:
+        # 1인분으로 보기엔 너무 큰 포장(간편조리세트 등)만 1회 분량 환산에서 뺀다.
+        # 무게만으로 거르면 해장국·국밥처럼 원래 1kg 넘는 정상 1인분까지 걸린다.
+        packaged = is_package(r.name, r.serving_grams)
+        if packaged:
             package_count += 1
-        ps = None if is_package else per_serving(r.nutrients, r.serving_grams)
+        ps = None if packaged else per_serving(r.nutrients, r.serving_grams)
 
         # 나트륨 주의 자동 생성. 손으로 쓴 caution.csv 가 있으면 그것이 우선한다.
-        # 포장 전체(is_package)나 나트륨을 모르는 경우(ps["sodium"] is None)는
+        # 포장 전체(packaged)나 나트륨을 모르는 경우(ps["sodium"] is None)는
         # 건너뛴다 — 근거 없는 숫자로 "한 번에 ○○mg" 라고 단정하지 않는다.
         # 한 그릇에 하루 권고량의 절반이 넘는 나트륨이면 알린다.
         # 신호등(혈당)은 건드리지 않고 문구만 붙인다.
@@ -145,7 +164,7 @@ def build(base: Path):
             "method": r.method,
             "category": r.category,
             "serving": {"label": r.serving_label, "grams": r.serving_grams,
-                        "isPackage": is_package},
+                        "isPackage": packaged},
             "nutrients": {
                 "kcal": r.nutrients.kcal, "carb": r.nutrients.carb,
                 "sugar": r.nutrients.sugar, "fiber": r.nutrients.fiber,
@@ -224,8 +243,9 @@ def main() -> int:
           f"(그중 나트륨 자동 생성 {stats['sodium_caution']:,}건, 전체의 {sodium_pct:.1f}%)")
     if sodium_pct > 5.0:
         print(f"경고: 나트륨 주의가 전체의 {sodium_pct:.1f}% — SODIUM_CAUTION_MG 를 올리는 것을 검토하세요.")
-    print(f"[포장 전체 제외(grams>={PACKAGE_GRAMS})] {stats['package']:,}건 "
-          f"— perServing·나트륨 주의 대상에서 제외")
+    markers = "/".join(PACKAGE_NAME_MARKERS)
+    print(f"[포장 전체 제외(grams>={PACKAGE_GRAMS} 이고 이름에 '{markers}')] "
+          f"{stats['package']:,}건 — perServing·나트륨 주의 대상에서 제외")
     print(f"[나트륨 모름(None)] {stats['sodium_none']:,}건 "
           f"({stats['sodium_none'] / total * 100:.1f}%) — 원본 공란, 0으로 채우지 않음")
     print(f"\n파일 크기: {raw_mb:.1f}MB (gzip {gz_mb:.1f}MB) → {out}")

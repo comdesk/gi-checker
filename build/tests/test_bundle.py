@@ -9,7 +9,7 @@ import pytest
 BUILD = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BUILD))
 
-from bundle import PACKAGE_GRAMS, build, chosung_of, search_aliases, search_norm
+from bundle import PACKAGE_GRAMS, PACKAGE_NAME_MARKERS, build, chosung_of, search_aliases, search_norm
 
 LEVELS = {"green", "amber", "red"}
 KINDS = {"measured", "estimated", "na", "none"}
@@ -176,16 +176,32 @@ def test_나트륨_주의가_실제로_붙는다(bundle):
 
 
 def test_포장_전체는_1인분으로_취급하지_않는다(bundle):
-    """PACKAGE_GRAMS 이상은 밀키트 등 포장 전체로 보고 1회 분량 환산·나트륨 주의를 건너뛴다."""
+    """이름에 포장 표시(간편조리세트 등)가 있고 무게도 큰 경우만 1회 분량 환산·
+    나트륨 주의를 건너뛴다. 무게만으로는 밀키트와 큰 그릇을 못 가른다."""
     found_package = False
     for f in bundle["foods"]:
-        g = f["serving"]["grams"]
-        if g and g >= PACKAGE_GRAMS:
+        if f["serving"]["isPackage"]:
             found_package = True
-            assert f["serving"]["isPackage"] is True, f["display"]
+            g = f["serving"]["grams"]
+            assert g and g >= PACKAGE_GRAMS, f["display"]
             assert f["perServing"] is None, f["display"]
             assert not (f["caution"] and "나트륨" in f["caution"]), f["display"]
-    assert found_package, "PACKAGE_GRAMS 이상인 레코드가 하나도 없습니다 — 검증이 공허합니다"
+    assert found_package, "포장으로 표시된 레코드가 하나도 없습니다 — 검증이 공허합니다"
+
+
+def test_큰_그릇은_포장으로_오해하지_않는다(bundle):
+    """해장국·국밥처럼 원래 1kg 넘는 1인분 요리는 제외 대상이 아니다."""
+    found_big_bowl = False
+    for f in bundle["foods"]:
+        g = f["serving"]["grams"]
+        if g and g >= PACKAGE_GRAMS and not any(m in f["name"] for m in PACKAGE_NAME_MARKERS):
+            found_big_bowl = True
+            assert f["serving"]["isPackage"] is False, f["display"]
+            assert f["perServing"] is not None, f["display"]
+        if f["serving"]["isPackage"]:
+            assert any(m in f["name"] for m in PACKAGE_NAME_MARKERS), \
+                f"{f['display']}: 이름에 포장 표시가 없는데 제외됨"
+    assert found_big_bowl, "1kg 넘는 비-포장 레코드가 하나도 없습니다 — 검증이 공허합니다"
 
 
 def test_아는_음식의_판정이_상식에_맞는다(bundle):
