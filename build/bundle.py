@@ -4,11 +4,13 @@ import gzip
 import json
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
+from statistics import quantiles
 
 from gi_match import apply_gi
 from group import METHOD_PREFIX, METHOD_TOKENS, apply_groups
-from normalize import load_records
+from normalize import apply_nutrient_fixes, fill_missing, load_records
 from score import judge
 
 CHOSUNG = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
@@ -92,17 +94,48 @@ def per_serving(n, grams):
 
     수치는 100g 기준이므로 grams/100 을 곱한다.
     ml 은 밀도를 몰라 1ml=1g 으로 근사한다 (normalize.py 와 같은 가정).
-    나트륨이 원본에 없으면(None) 환산해도 여전히 None — 0을 만들어내지 않는다.
+    모르는 값(None)은 환산해도 여전히 None — 0을 만들어내지 않는다.
     """
     if not grams:
         return None
     k = grams / 100.0
+
+    def scale(value, digits=1):
+        return None if value is None else round(value * k, digits)
+
     return {
-        "kcal": round(n.kcal * k, 1), "carb": round(n.carb * k, 1),
-        "sugar": round(n.sugar * k, 1), "fiber": round(n.fiber * k, 1),
-        "fat": round(n.fat * k, 1),
+        "kcal": scale(n.kcal), "carb": scale(n.carb),
+        "sugar": scale(n.sugar), "fiber": scale(n.fiber),
+        "fat": scale(n.fat),
         "sodium": None if n.sodium is None else round(n.sodium * k),
     }
+
+
+# 식이섬유를 끝내 모를 때 '최선의 경우' 를 어디까지 인정할지.
+# 상한 없이 두면 최선의 경우가 늘 c=0(초록)이 되어 거의 다 unknown 이 된다.
+# 같은 카테고리에서 실제로 관찰된 식이섬유/탄수화물 비율의 90퍼센타일을 쓴다 —
+# '이 부류 음식 중 식이섬유가 아주 많은 축' 까지는 봐주되 그 이상은 상상하지 않는다.
+FIBER_RATIO_PERCENTILE = 90
+FIBER_RATIO_MIN_SAMPLES = 10
+
+
+def fiber_ratio_caps(records) -> dict[str, float]:
+    ratios: dict[str, list[float]] = defaultdict(list)
+    for r in records:
+        n = r.nutrients
+        if n.fiber is not None and n.carb > 0:
+            ratios[r.category].append(min(n.fiber / n.carb, 1.0))
+    caps = {}
+    for category, values in ratios.items():
+        if len(values) >= FIBER_RATIO_MIN_SAMPLES:
+            caps[category] = quantiles(values, n=10)[FIBER_RATIO_PERCENTILE // 10 - 1]
+    return caps
+
+
+def fiber_ceiling(r, caps: dict[str, float]) -> float | None:
+    """이 음식의 식이섬유가 최대 얼마까지일 수 있는가(g). 근거가 없으면 None."""
+    cap = caps.get(r.category)
+    return None if cap is None else r.nutrients.carb * cap
 
 
 def _variant_part(name: str, group: str) -> str:
@@ -138,7 +171,8 @@ def _too_spread_to_merge(carbs: list[float]) -> bool:
     return carb_max / carb_min >= CARB_RATIO_LIMIT
 
 
-def merge_variants(foods: list[dict], groups: dict[str, list[str]]):
+def merge_variants(foods: list[dict], groups: dict[str, list[str]],
+                   labels: dict[str, str] | None = None):
     """답(gi.value·verdict.level)이 완전히 같은 (group, method) 묶음을 한 줄로 합친다.
 
     사용자가 실제로 겪은 문제: '감자 대지 찐것' 같은 품종명이 그대로 화면에
@@ -192,8 +226,11 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]]):
         # 대표: 이름이 가장 단순한 것('_' 로 나눈 토막이 가장 적은 것). 동점이면 짧은 것.
         rep = min(items, key=lambda f: (f["name"].count("_"), len(f["name"])))
 
+        # 그룹 키가 아니라 사람이 부르는 이름을 쓴다 — '데친 호박 애호박' 이 아니라
+        # '데친 애호박'. labels 가 없으면(단위 테스트) 키를 그대로 쓴다.
+        label = (labels or {}).get(rep["id"], group)
         prefix = METHOD_PREFIX.get(method)
-        rep["display"] = f"{prefix} {group}" if prefix else group
+        rep["display"] = f"{prefix} {label}" if prefix else label
 
         variants = []
         for f in items:
@@ -230,17 +267,24 @@ def build(base: Path):
     records, filter_stats = load_records(
         base / "raw", base / "data" / "category_allow.csv")
     group_stats = apply_groups(records, base / "data" / "food_group.csv")
+    # 손으로 채운 값이 먼저다 — 사람이 이미 답을 아는 것을 기계가 추정하면 안 된다.
+    fixed_count = apply_nutrient_fixes(records, base / "data" / "nutrient_fix.csv")
+    # 상속은 조리법을 보므로 apply_groups 다음이어야 한다 — 말린 것과 생것은
+    # 수분이 빠져 농도가 몇 배 다르니 같은 조리법끼리 물려받아야 한다.
+    fill_stats = fill_missing(records)
+    fiber_caps = fiber_ratio_caps(records)
     gi_stats = apply_gi(records, base / "data" / "gi_map.csv")
 
     foods, groups = [], {}
-    level_counts = {"green": 0, "amber": 0, "red": 0}
+    level_counts = {"green": 0, "amber": 0, "red": 0, "unknown": 0}
     kind_counts = {"measured": 0, "estimated": 0, "na": 0, "none": 0}
     sodium_caution_count = 0
     package_count = 0
     sodium_none_count = 0
 
     for r in records:
-        verdict = judge(r.nutrients, r.gi_value)
+        verdict = judge(r.nutrients, r.gi_value,
+                        fiber_max=fiber_ceiling(r, fiber_caps))
 
         # 규칙 1(저탄수)로 초록이 된 항목은 GI 가 성립하지 않는 음식이다.
         # 빈칸이 아니라 'na' 로 표시해 화면에서 이유를 설명할 수 있게 한다.
@@ -282,6 +326,10 @@ def build(base: Path):
             "name": r.name,
             "display": display,
             "group": r.group,
+            # 그룹 키와 사람이 부르는 이름이 다를 때만 싣는다 (4천 건에 매번
+            # 같은 문자열을 넣을 이유가 없다). 키 '호박 단호박' → 이름 '단호박'.
+            **({"groupLabel": r.group_label}
+               if r.group and r.group_label and r.group_label != r.group else {}),
             "method": r.method,
             "category": r.category,
             "serving": {"label": r.serving_label, "grams": r.serving_grams,
@@ -291,6 +339,9 @@ def build(base: Path):
                 "sugar": r.nutrients.sugar, "fiber": r.nutrients.fiber,
                 "fat": r.nutrients.fat, "sodium": r.nutrients.sodium,
             },
+            # 원본에 없어 같은 대표식품명에서 추정한 항목. 측정값인 척하면 안 되므로
+            # 화면에서 '추정' 이라고 밝힌다. null 은 끝내 모른다는 뜻이다.
+            "estimated": list(r.inherited),
             "perServing": ps,
             "gi": {
                 "value": gi_value,
@@ -311,7 +362,8 @@ def build(base: Path):
     # 합친다. 사라진 레코드의 id 는 groups 목록에서도 지운다(merge_variants 가
     # groups 를 제자리에서 갱신한다) — 안 그러면 조리법 비교가 사라진 id 를 가리킨다.
     before_total = len(foods)
-    foods, merge_reports, merge_skipped = merge_variants(foods, groups)
+    group_labels = {r.id: r.group_label for r in records if r.group_label}
+    foods, merge_reports, merge_skipped = merge_variants(foods, groups, group_labels)
     merged_records = before_total - len(foods)
 
     # 신호등·GI 표시 상태 분포는 합치기 이후(실제로 화면에 보이는 레코드) 기준으로
@@ -319,7 +371,7 @@ def build(base: Path):
     # 비중만 줄어드는 것이지 다른 답의 비중이 늘어나는 것은 아니다.
     level_counts_before = dict(level_counts)
     kind_counts_before = dict(kind_counts)
-    level_counts = {"green": 0, "amber": 0, "red": 0}
+    level_counts = {"green": 0, "amber": 0, "red": 0, "unknown": 0}
     kind_counts = {"measured": 0, "estimated": 0, "na": 0, "none": 0}
     for f in foods:
         level_counts[f["verdict"]["level"]] += 1
@@ -340,6 +392,7 @@ def build(base: Path):
         "level": level_counts, "kind": kind_counts,
         "sodium_caution": sodium_caution_count,
         "package": package_count, "sodium_none": sodium_none_count,
+        "fill": fill_stats, "nutrient_fix": fixed_count,
         "merge": {
             "before_total": before_total, "after_total": len(foods),
             "merged_records": merged_records, "bundles": len(merge_reports),
@@ -393,6 +446,15 @@ def main() -> int:
           f"{stats['package']:,}건 — perServing·나트륨 주의 대상에서 제외")
     print(f"[나트륨 모름(None)] {stats['sodium_none']:,}건 "
           f"({stats['sodium_none'] / total * 100:.1f}%) — 원본 공란, 0으로 채우지 않음")
+
+    print("[빈 칸 메우기] 원본 공란을 0으로 찍지 않고 같은 대표식품명에서 비율로 물려받는다")
+    for key in sorted(stats["fill"]):
+        print(f"  {key:>14}: {stats['fill'][key]:,}")
+    print(f"  {'손으로 채움':>14}: {stats['nutrient_fix']:,} (nutrient_fix.csv)")
+    est = sum(1 for f in bundle["foods"] if f["estimated"])
+    unknown = stats["level"]["unknown"]
+    print(f"  화면 기준 추정치 포함 {est:,}건 ({est / total * 100:.1f}%), "
+          f"끝내 판정 불가 {unknown:,}건 ({unknown / total * 100:.1f}%)")
 
     merge = stats["merge"]
     print("[답이 같은 품종 합치기]")

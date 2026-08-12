@@ -10,8 +10,9 @@ import csv
 import re
 import unicodedata
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from statistics import median
 
 from group import METHOD_PREFIX, METHOD_WORDS
 from score import Nutrients
@@ -67,6 +68,9 @@ class FoodRecord:
     nutrients: Nutrients
     serving_grams: float | None = None   # 1회 분량 실제 중량(g). ml 은 1ml=1g 근사. 모르면 None
     group: str | None = None
+    # 그룹의 화면용 이름. 키와 다를 수 있다 — 키 '호박 단호박' 은 다른 그룹과
+    # 겹치지 않기 위한 것이고, 사람이 부르는 이름은 '단호박' 이다.
+    group_label: str | None = None
     method: str | None = None
     gi_value: float | None = None
     gi_kind: str = "none"
@@ -75,6 +79,9 @@ class FoodRecord:
     source: str | None = None   # None = 원본 CSV, 문자열 = 보충 레코드 출처
     caution: str | None = None  # 표시용 주의 문구. 신호등 등급은 바꾸지 않는다
     is_prepared: bool = False   # True = 음식.csv(조리식품) 출처. 원재료성 중복 정리에만 쓴다
+    # 원본에 값이 없어 같은 대표식품명에서 물려받은 항목들 ('sugar','fiber','fat').
+    # 화면에 '추정치' 라고 밝히기 위해 남긴다 — 측정값인 척하면 안 된다.
+    inherited: tuple[str, ...] = ()
 
 
 def _num(value) -> float | None:
@@ -308,6 +315,112 @@ def remove_source_duplicates(records: list) -> tuple[list, list]:
     return removed, kept
 
 
+def load_nutrient_fixes(path: Path) -> dict[str, dict[str, float]]:
+    """손으로 채운 영양성분. 상속과 구간 판정보다 우선한다.
+
+    원본이 비어 있는데 사람은 답을 아는 경우가 있다 — 당밀은 시럽이니 탄수화물이
+    전부 당이다. 기계가 추론할 수 없는 것만 여기 적는다. 반드시 note 에 근거를 남긴다.
+    """
+    if not path.exists():
+        return {}
+    fixes: dict[str, dict[str, float]] = defaultdict(dict)
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        for lineno, row in enumerate(csv.DictReader(f), start=2):
+            name = _clean(row.get("name"))
+            field_name = _clean(row.get("field"))
+            if not name:
+                continue
+            if field_name not in ("sugar", "fiber", "fat", "sodium"):
+                raise SystemExit(f"nutrient_fix.csv:{lineno} 알 수 없는 항목 '{field_name}'")
+            value = _num(row.get("value"))
+            if value is None:
+                raise SystemExit(f"nutrient_fix.csv:{lineno} '{name}' 의 값이 비어 있습니다")
+            if not _clean(row.get("note")):
+                raise SystemExit(f"nutrient_fix.csv:{lineno} '{name}' 에 근거(note)가 없습니다")
+            fixes[name][field_name] = value
+    return dict(fixes)
+
+
+def apply_nutrient_fixes(records, path: Path) -> int:
+    fixes = load_nutrient_fixes(path)
+    used = 0
+    for r in records:
+        fix = fixes.get(r.name)
+        if fix:
+            r.nutrients = replace(r.nutrients, **fix)
+            used += 1
+    unused = sorted(set(fixes) - {r.name for r in records})
+    if unused:
+        raise SystemExit(f"nutrient_fix.csv 에 없는 식품이 적혀 있습니다: {unused}")
+    return used
+
+
+# 탄수화물에 대한 비율로 물려받을 항목. 당류와 식이섬유는 둘 다 탄수화물의
+# 일부라서, 말리거나 졸여서 농축돼도 탄수화물과 함께 늘어난다 — 비율은 거의 그대로다.
+_RATIO_FILLABLE = ("sugar", "fiber")
+
+
+def fill_missing(records) -> dict[str, int]:
+    """빈 칸을 같은 대표식품명의 다른 레코드에서 물려받는다.
+
+    GI 상속(gi_match.py)과 같은 발상이다. '보리_찰보리_할맥' 의 식이섬유가
+    비어 있으면 '보리_겉보리_할맥' 에서 가져온다. 같은 대표식품명이면 같은
+    작물이므로, 품종 사이 편차보다 '0 으로 찍기' 의 오차가 훨씬 크다.
+
+    절대값이 아니라 **탄수화물에 대한 비율**을 물려받는다. 절대값을 복사하면
+    '양파_말린것'(탄수 78g)이 생양파의 당류 4.8g 을 그대로 받아 초록이 된다 —
+    말린 양파는 수분이 빠져 당이 열 배로 농축된 것인데도. 비율로 받으면
+    0.6 x 78 = 46.8g 이 되어 단 음식 보정에 제대로 걸린다.
+
+    지방은 탄수화물과 무관하므로 비율이 성립하지 않는다. 같은 조리법의 절대값만
+    쓰고, 없으면 채우지 않는다 — 지방은 단 음식 보정의 뒤 조건에만 쓰여
+    영향이 작다.
+
+    같은 조리법을 우선한다. 평균이 아니라 중앙값을 써서 한 건이 튀어도
+    끌려가지 않게 한다. 끝내 채우지 못한 것은 None 으로 남고, 그건
+    score.judge() 가 구간 판정으로 처리한다.
+    """
+    ratios: dict[tuple, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    fats: dict[tuple, list[float]] = defaultdict(list)
+    for r in records:
+        n = r.nutrients
+        for key in ((r.rep_name, r.method), (r.rep_name, None)):
+            if n.carb > 0:
+                for field_name in _RATIO_FILLABLE:
+                    value = getattr(n, field_name)
+                    if value is not None:
+                        ratios[key][field_name].append(min(value / n.carb, 1.0))
+            if n.fat is not None:
+                fats[key].append(n.fat)
+
+    stats: dict[str, int] = defaultdict(int)
+    for r in records:
+        n = r.nutrients
+        filled = {}
+        for field_name in _RATIO_FILLABLE:
+            if getattr(n, field_name) is not None:
+                continue
+            for key in ((r.rep_name, r.method), (r.rep_name, None)):
+                pool = ratios[key].get(field_name)
+                if pool:
+                    filled[field_name] = round(median(pool) * n.carb, 1)
+                    stats[f"{field_name} 상속"] += 1
+                    break
+            else:
+                stats[f"{field_name} 못채움"] += 1
+        if n.fat is None:
+            pool = fats.get((r.rep_name, r.method))
+            if pool:
+                filled["fat"] = round(median(pool), 1)
+                stats["fat 상속"] += 1
+            else:
+                stats["fat 못채움"] += 1
+        if filled:
+            r.nutrients = replace(n, **filled)
+            r.inherited = tuple(sorted(set(r.inherited) | set(filled)))
+    return dict(stats)
+
+
 def load_records(raw_dir: Path, allow_path: Path):
     allow = load_allow(allow_path)
     name_fix = load_name_corrections(allow_path.parent / "name_correction.csv")
@@ -358,10 +471,11 @@ def load_records(raw_dir: Path, allow_path: Path):
                 values = {k: _num(row[COL[k]])
                           for k in ("kcal", "carb", "sugar", "fiber", "fat", "sodium")}
                 # 탄수화물·열량 둘 중 하나라도 없으면 판정 자체가 불가능하니 제외한다.
-                # (당류·식이섬유·지방은 없으면 0으로 채워도 판정에 지장 없음.
-                #  나트륨은 판정에 아예 쓰이지 않으므로 0으로 채우지 않고 None(모름)으로
-                #  둔다 — 탄수화물을 0으로 채워 허위 초록을 만들던 실수와 같은 종류를
-                #  반복하지 않는다)
+                # 나머지(당류·식이섬유·지방·나트륨)는 없으면 None 으로 둔다.
+                # 0 으로 채우면 안 된다 — 그것은 '없다' 가 아니라 '모른다' 이고,
+                # 0 으로 찍는 순간 당밀(탄수 68.2g, 당류 결측)이 초록으로 나온다.
+                # 결측 처리는 아래 _fill_missing() 의 상속과 score.judge() 의 구간
+                # 판정이 맡는다.
                 if values["carb"] is None or values["kcal"] is None:
                     stats["영양성분누락"] += 1
                     continue
@@ -399,10 +513,8 @@ def load_records(raw_dir: Path, allow_path: Path):
                     serving_grams=serving_grams,
                     nutrients=Nutrients(
                         kcal=round(values["kcal"], 1), carb=round(values["carb"], 1),
-                        sugar=round(values["sugar"] or 0, 1),
-                        fiber=round(values["fiber"] or 0, 1),
-                        fat=round(values["fat"] or 0, 1),
-                        sodium=None if values["sodium"] is None else round(values["sodium"], 1),
+                        **{k: None if values[k] is None else round(values[k], 1)
+                           for k in ("sugar", "fiber", "fat", "sodium")},
                     ),
                     is_prepared=(filename == "음식.csv"),
                 )

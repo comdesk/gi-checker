@@ -184,3 +184,50 @@ def test_나트륨은_판정을_바꾸지_않는다():
     base = Nutrients(kcal=50, carb=3.0, sugar=1.0, fiber=0.5, fat=1.0)
     salty = Nutrients(kcal=50, carb=3.0, sugar=1.0, fiber=0.5, fat=1.0, sodium=5000)
     assert judge(base, gi=None) == judge(salty, gi=None)
+
+
+# ── 모르는 값은 0이 아니다 (구간 판정) ──────────────────────────────────
+
+def test_당류를_모르면_단_음식_보정을_건너뛰지_않는다():
+    """당밀 사건. 원본에 당류 칸이 비어 있다고 0으로 찍으면
+    탄수화물 68.2g 짜리 시럽이 GI 55(초록 경계)로 통과해 '드셔도 좋아요'가 된다.
+    모르면 '단 음식일 수도 있다'고 봐야 한다."""
+    molasses = Nutrients(kcal=274, carb=68.2, sugar=None, fiber=None, fat=None)
+    assert judge(molasses, gi=55).level != "green"
+
+
+def test_식이섬유를_모르면_거짓_빨강도_안_된다():
+    """반대 방향. 콩(대두) 갈색콩은 식이섬유가 비어 있어 c=30.6 으로 계산돼
+    빨강이었지만, 같은 대두인 서리태는 식이섬유 20.8 로 초록이었다.
+    모르면 빨강으로 단정해서도 안 된다."""
+    bean = Nutrients(kcal=409, carb=30.6, sugar=None, fiber=None, fat=17.2)
+    assert judge(bean, gi=None, fiber_max=25.0).level != "red"
+
+
+def test_값이_다_있으면_구간_판정이_끼어들지_않는다():
+    """결측 처리가 기존 판정을 흔들면 안 된다."""
+    known = Nutrients(kcal=130, carb=28.0, sugar=0.1, fiber=0.4, fat=0.3)
+    assert judge(known, gi=73) == judge(known, gi=73, fiber_max=5.0)
+
+
+def test_모르는_값의_범위_양_끝이_같으면_확정한다():
+    """모른다고 전부 unknown 이 되면 앱이 쓸모없어진다.
+    탄수화물이 2g 이면 식이섬유가 얼마든 규칙 1로 초록이다."""
+    lettuce = Nutrients(kcal=12, carb=2.0, sugar=None, fiber=None, fat=None)
+    v = judge(lettuce, gi=None)
+    assert v.level == "green"
+    assert v.reason == "low-carb"
+
+
+def test_답이_갈리면_unknown():
+    """최선과 최악이 다르면 모른다고 말한다. 찍지 않는다."""
+    dried_herb = Nutrients(kcal=300, carb=77.0, sugar=None, fiber=None, fat=None)
+    v = judge(dried_herb, gi=None, fiber_max=60.0)
+    assert v.level == "unknown"
+    assert v.reason == "insufficient"
+
+
+def test_fiber_max가_없으면_탄수화물_전부를_식이섬유로_볼_수_있다():
+    """근거가 없으면 최선의 경우를 넉넉히 잡는다 — 함부로 나쁘게 단정하지 않는다."""
+    unknown_food = Nutrients(kcal=300, carb=70.0, sugar=None, fiber=None, fat=None)
+    assert judge(unknown_food, gi=None).level == "unknown"

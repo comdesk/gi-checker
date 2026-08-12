@@ -1,20 +1,32 @@
 // 음식 데이터 → HTML 문자열. DOM 이벤트는 여기서 다루지 않는다.
 
-export const LEVEL_LABEL = { green: '좋음', amber: '주의', red: '피하기' };
+// 'unknown' 은 신호등의 네 번째 색이 아니라 '신호등을 켤 수 없음' 이다.
+// 원본에 당류·식이섬유가 비어 있어 최선의 경우와 최악의 경우가 서로 다른
+// 답이 나오는 음식(전체의 3.5%, 대부분 말린 나물·약차)이다. 찍어서 맞히는
+// 것보다 모른다고 말하는 편이 낫다 — 당뇨 환자가 이 화면을 보고 먹는다.
+export const LEVEL_LABEL = { green: '좋음', amber: '주의', red: '피하기', unknown: '모름' };
 
 export const REASON_LINE = {
   'low-carb': '탄수화물이 적어 혈당에 거의 영향 없어요',
   'gi+sweet': '지방과 당분이 함께 많습니다',
   'nutrient+sweet': '당분이 많습니다',
+  insufficient: '영양성분 정보가 모자라 판단할 수 없어요',
 };
 
 export const LEVEL_LINE = {
   green: '드셔도 좋아요',
   amber: '조금만 드세요',
   red: '혈당을 빠르게 올립니다',
+  unknown: '영양성분 정보가 모자라 판단할 수 없어요',
 };
 
-export const PILL_TEXT = { green: '좋음', amber: '주의', red: '드시지 마세요' };
+export const PILL_TEXT = {
+  green: '좋음', amber: '주의', red: '드시지 마세요', unknown: '알 수 없음',
+};
+
+// 그룹 키는 다른 그룹과 겹치지 않기 위한 것('호박 단호박')이고,
+// 사람에게 보여줄 이름은 따로 있다('단호박').
+export const groupName = food => food.groupLabel ?? food.group;
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -83,9 +95,13 @@ export function giMeter(food) {
   const { value, kind, basis } = food.gi;
 
   if (value == null) {
-    const message = kind === 'na'
-      ? '탄수화물이 적어 GI 가 성립하지 않습니다'
-      : 'GI 자료가 없어 영양성분으로 판정했습니다';
+    // 판정 자체를 못 한 음식에 '영양성분으로 판정했습니다' 라고 하면
+    // 바로 위 '판단할 수 없습니다' 와 정면으로 어긋난다.
+    const message = level === 'unknown'
+      ? 'GI 자료도 없습니다'
+      : kind === 'na'
+        ? '탄수화물이 적어 GI 가 성립하지 않습니다'
+        : 'GI 자료가 없어 영양성분으로 판정했습니다';
     return `<div class="gi-box">
       <div class="gi-top"><span class="gi-l">GI 지수</span>
         <span class="gi-v"><span class="gi-n" style="color:var(--ink3)">—</span></span></div>
@@ -160,7 +176,7 @@ export function waysList(food, members) {
   }
 
   const heading = food.verdict.level === 'red'
-    ? `같은 ${esc(food.group)}라도 이렇게 드세요`
+    ? `같은 ${esc(groupName(food))}라도 이렇게 드세요`
     : '조리법에 따라 이렇게 달라져요';
 
   const wayRows = rows.map(m => {
@@ -202,14 +218,38 @@ const NUT_ROWS = [
   ['나트륨', 'sodium', 'mg'],
 ];
 
-function nutRows(n) {
+function nutRows(n, estimated = []) {
   return NUT_ROWS.map(([label, key, unit]) => {
     // null 은 '모름'이다. 0 으로 표시하면 거짓말이 된다.
     const v = n[key];
     const shown = v == null ? '정보 없음' : `${v}${unit}`;
     const dim = v == null ? ' style="color:var(--ink3);font-weight:600"' : '';
-    return `<div><span>${label}</span><span${dim}>${shown}</span></div>`;
+    // 물려받은 값은 측정값이 아니다. 같은 값으로 보이게 두면 안 된다.
+    const mark = estimated.includes(key) ? '<span class="est">추정</span>' : '';
+    return `<div><span>${label}${mark}</span><span${dim}>${shown}</span></div>`;
   }).join('');
+}
+
+const MISSING_LABEL = { sugar: '당류', fiber: '식이섬유', fat: '지방' };
+
+/**
+ * 신호등을 켤 수 없을 때 그 이유를 밝힌다.
+ *
+ * '알 수 없음' 만 띄워놓고 왜인지 말하지 않으면 사용자는 앱이 고장난 줄 안다.
+ * 어떤 값이 없어서 판단이 갈렸는지까지 말해야 스스로 판단할 여지가 생긴다.
+ */
+export function unknownBlock(food) {
+  if (food.verdict.level !== 'unknown') return '';
+  const missing = ['sugar', 'fiber', 'fat']
+    .filter(k => food.nutrients[k] == null)
+    .map(k => MISSING_LABEL[k]);
+  const what = missing.length ? `${missing.join('·')} 정보가 없습니다.` : '';
+  return `<div class="unsure">
+    <p><b>${what}</b> 그래서 이 음식이 혈당을 얼마나 올리는지
+    좋게도 나쁘게도 단정할 수 없습니다. 찍어서 알려드리지 않겠습니다.</p>
+    <p class="unsure-sub">아래 영양성분에서 아는 값은 확인하실 수 있습니다.
+    탄수화물이 <b>${food.nutrients.carb}g</b> 입니다.</p>
+  </div>`;
 }
 
 /**
@@ -218,15 +258,16 @@ function nutRows(n) {
  */
 export function nutrientTable(food) {
   const base = food.serving.label.endsWith('기준') ? food.serving.label : '100g 기준';
+  const est = food.estimated ?? [];
   let body = `<div class="nut-group">
       <p class="nut-h">${esc(base)}</p>
-      ${nutRows(food.nutrients)}
+      ${nutRows(food.nutrients, est)}
     </div>`;
 
   if (food.perServing) {
     body += `<div class="nut-group">
       <p class="nut-h">한 번에 먹는 양 ${esc(food.serving.label)} 기준</p>
-      ${nutRows(food.perServing)}
+      ${nutRows(food.perServing, est)}
     </div>`;
   } else if (food.serving.isPackage) {
     body += `<p class="nut-note">포장 전체 ${esc(food.serving.label)} 기준이라
@@ -238,6 +279,11 @@ export function nutrientTable(food) {
   if (food.source) origin.push(`출처 ${esc(food.source)}`);
   if (food.variants && food.variants.length > 1) {
     origin.push(`품종 ${food.variants.length}종 · ${food.variants.map(esc).join(', ')}`);
+  }
+  if (est.length) {
+    const names = est.map(k => MISSING_LABEL[k]).filter(Boolean).join('·');
+    body += `<p class="nut-note">${names}는 원본에 값이 없어 같은 종류 음식에서
+      추정한 값입니다. 실제와 다를 수 있습니다.</p>`;
   }
   if (origin.length) body += `<p class="nut-src">${origin.join(' · ')}</p>`;
 
@@ -254,11 +300,13 @@ export function detailScreen(food, members) {
   // '100g 기준' 은 분량이 아니라 영양성분의 기준량이므로 그 줄을 내지 않는다
   // (영양성분 상자 제목이 이미 기준을 밝힌다).
   const hasRealPortion = food.serving.grams && !food.serving.isPackage;
-  const servingLine = level === 'red' || !hasRealPortion ? ''
+  // 판단할 수 없는 음식에 권장량을 말하면 판단한 것처럼 읽힌다.
+  const hideServing = level === 'red' || level === 'unknown' || !hasRealPortion;
+  const servingLine = hideServing ? ''
     : `<p class="fact">보통 한 번에 <b>${esc(food.serving.label)}</b></p>`;
 
   return `
-    <button class="nav" id="back"><span class="back">‹</span> ${esc(food.group ?? '검색으로')}</button>
+    <button class="nav" id="back"><span class="back">‹</span> ${esc(groupName(food) ?? '검색으로')}</button>
     <div class="accent" style="background:var(--${level})"></div>
     <div class="head">
       <h1 class="name">${esc(displayName(food))}</h1>
@@ -268,6 +316,7 @@ export function detailScreen(food, members) {
       </span>
       <p class="say">${verdictLine(food)}</p>
     </div>
+    ${unknownBlock(food)}
     ${cautionBlock(food)}
     ${giMeter(food)}
     ${waysList(food, members)}

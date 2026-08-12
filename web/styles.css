@@ -4,6 +4,9 @@
   --green:#1f7a4c; --green-tint:#edf7f1; --green-ink:#145638; --green-soft:#bfe3ce;
   --amber:#d99a1f; --amber-tint:#fdf6e7; --amber-ink:#6b4e11; --amber-soft:#f2ddaa;
   --red:#c8372d;   --red-tint:#fdf1f0;   --red-ink:#8c231b;   --red-soft:#f3c9c5;
+  /* 신호등을 켤 수 없는 경우. 초록/노랑/빨강 어느 쪽으로도 읽히면 안 되므로
+     채도를 완전히 뺀 회색이다. */
+  --unknown:#98a0aa; --unknown-tint:#f4f5f7; --unknown-ink:#4d545d; --unknown-soft:#dde1e6;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -158,3 +161,16 @@ details.more summary::-webkit-details-marker{display:none}
        color:var(--ink3)}
 .nut-note{margin:0 0 12px;font-size:15px;line-height:1.55;color:var(--ink2)}
 .nut-src{margin:2px 0 0;font-size:13px;line-height:1.5;color:var(--ink3)}
+
+/* ── 판단할 수 없는 음식 ──
+   신호등의 네 번째 색이 아니라 '신호등을 켤 수 없음' 이다. 초록/노랑/빨강
+   어느 쪽으로도 읽히면 안 되므로 색을 쓰지 않고 테두리로만 구분한다. */
+.unsure{margin:18px 22px 0;padding:16px 18px;border-radius:14px;
+        background:var(--unknown-tint);border:1.5px solid var(--unknown-soft)}
+.unsure p{margin:0;font-size:17px;line-height:1.55;color:var(--ink)}
+.unsure b{font-weight:800}
+.unsure-sub{margin-top:9px !important;font-size:16px;color:var(--ink2)}
+/* 물려받은 값은 측정값과 같아 보이면 안 된다. */
+.est{display:inline-block;margin-left:7px;padding:2px 7px;border-radius:5px;
+     background:var(--line);color:var(--ink3);font-size:12px;font-weight:800;
+     vertical-align:middle}

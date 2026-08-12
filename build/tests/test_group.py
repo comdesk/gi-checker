@@ -189,3 +189,52 @@ def test_중복이었던_찐고구마는_지워졌다(records):
     names = {r.name for r in records}
     assert "고구마_찐것" in names
     assert "고구마_찐고구마" not in names
+
+
+# ── 대표식품명 아래에 서로 다른 음식이 묶여 있던 문제 ────────────────
+
+def test_애호박과_단호박은_다른_그룹이다(records):
+    """조리법 비교가 '삶으면 좋고 찌면 주의'로 읽혔지만 실제로는
+    쥬키니(삶기)와 단호박(찌기)을 비교하고 있었다."""
+    by_group = {}
+    for r in records:
+        if r.rep_name == "호박" and r.group:
+            by_group.setdefault(r.group, set()).add(r.name)
+    for name, group in [("애호박", "호박 애호박"), ("단호박", "호박 단호박"),
+                        ("쥬키니", "호박 쥬키니")]:
+        assert group in by_group, f"{name} 이 따로 갈리지 않았다: {sorted(by_group)}"
+        assert all(name in n for n in by_group[group]), by_group[group]
+
+
+def test_백미와_현미는_다른_그룹이다(records):
+    groups = {r.group for r in records if r.rep_name == "멥쌀" and r.group}
+    assert "멥쌀 백미" in groups and "멥쌀 현미" in groups, sorted(groups)
+
+
+def test_품종은_여전히_같은_그룹이다(records):
+    """감자 대지·수미는 답이 같은 품종이므로 갈라서는 안 된다.
+    종 분리가 품종까지 쪼개면 사용자가 고친 문제가 되살아난다."""
+    steamed = {r.group for r in records
+               if r.rep_name == "감자" and r.method == "찌기"}
+    assert steamed == {"감자"}, steamed
+
+
+def test_갈린_종은_사람이_부르는_이름으로_보인다(records):
+    """그룹 키는 '호박 단호박' 이지만 화면에는 '찐 단호박' 이라고 나와야 한다."""
+    steamed = [r for r in records if r.name == "호박_단호박_찐것"]
+    assert steamed, "테스트 대상이 사라졌다"
+    assert steamed[0].display == "찐 단호박", steamed[0].display
+
+
+def test_부위는_홀로_서지_않는다(records):
+    """'데친 잎' 은 무슨 잎인지 알 수 없다. '데친 호박 잎' 이어야 한다."""
+    leaf = [r for r in records if r.name == "호박_잎_데친것"]
+    assert leaf, "테스트 대상이 사라졌다"
+    assert leaf[0].display == "데친 호박 잎", leaf[0].display
+
+
+def test_난백과_난황은_다른_그룹이다(records):
+    """Task 11B 에서 '함께 먹는 부위' 라며 뺐던 판단을 뒤집었다.
+    원본은 난백(탄수 0.1g)과 난황(5.8g)을 따로 재어 놓았다."""
+    groups = {r.group for r in records if r.rep_name == "달걀" and r.group}
+    assert "달걀 난백" in groups and "달걀 난황" in groups, sorted(groups)

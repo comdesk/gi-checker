@@ -40,12 +40,21 @@ METHOD_PREFIX = {
 # 일치하는지' 검사할 때 재사용한다 (리뷰 Critical 2).
 METHOD_TOKENS = {word for word, _ in METHOD_WORDS}
 
-# 같은 식물이라도 뿌리와 잎은 전혀 다른 음식이다.
+# 같은 식물·같은 생선이라도 부위가 다르면 전혀 다른 음식이다.
 # 조리법 비교는 같은 부위끼리만 의미가 있다.
 #
-# '껍질'·'내장'·'알'·'씨' 도 부위지만 이번엔 넣지 않는다 — 굴 내장이나 생선 알은
-# 함께 먹는 부위라 분리가 오히려 어색하다. 잎채소로 먹는 줄기·잎·순·싹만 대상이다.
-PART_MARKERS = ("줄기", "잎", "순", "싹")
+# Task 11B 에서는 '알'·'내장' 을 뺐다 — "굴 내장이나 생선 알은 함께 먹는 부위라
+# 분리가 오히려 어색하다" 는 판단이었다. 데이터를 보니 그 판단이 틀렸다.
+# 원본은 이것들을 **따로 측정한 별개 항목**으로 싣고 있고, 값이 크게 다르다:
+#   달걀   난백 탄수 0.1g  vs  난황 5.8g
+#   명태   육   탄수 0.0g  vs  알 29.2g
+#   치커리 잎(적치콘) 2.5g  vs  뿌리 17.5g
+# 함께 먹는지 여부는 우리가 정할 일이 아니다. 따로 재어 놓은 것을 한 그룹에
+# 넣으면 조리법 비교가 부위 비교로 바뀐다.
+PART_MARKERS = (
+    "줄기", "잎", "순", "싹", "뿌리",          # 식물
+    "육", "알", "내장", "난백", "난황", "관자", "전체",  # 동물성
+)
 
 # 세그먼트가 부위 표시와 '정확히' 일치할 때만 잡는다('_줄기_', '_잎_' 처럼
 # 밑줄 사이에 있을 때). 괄호 설명은 붙어도 된다 — '줄기(껍질 포함)' 도 줄기다.
@@ -72,6 +81,42 @@ def _find_part(name: str) -> str | None:
         for marker, pattern in PART_PATTERN.items():
             if pattern.match(part):
                 return marker
+    return None
+
+
+def load_species_split(path: Path) -> dict[str, set[str]]:
+    """대표식품명 아래에 사실 서로 다른 음식이 묶여 있는 경우의 분리 목록.
+
+    '호박' 안에 애호박·단호박·쥬키니가 함께 있으면 조리법 비교가 채소 비교로
+    바뀐다("삶으면 좋고 찌면 주의" = 쥬키니 vs 단호박). 품종(감자 대지·수미)은
+    답이 같아 합쳐도 되지만 이것들은 가게에서 따로 파는 다른 음식이다.
+
+    영양성분 편차만으로는 이 둘을 가를 수 없다 — 경계선에서 흔들리는 같은
+    음식과 구분이 안 된다. 사람이 판단해 적는다.
+    """
+    if not path.exists():
+        return {}
+    out: dict[str, set[str]] = {}
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        for lineno, row in enumerate(csv.DictReader(f), start=2):
+            rep, marker = (row.get("rep_name") or "").strip(), (row.get("marker") or "").strip()
+            if not rep:
+                continue
+            if not marker:
+                raise SystemExit(f"species_split.csv:{lineno} '{rep}' 의 marker 가 비었습니다")
+            if not (row.get("note") or "").strip():
+                raise SystemExit(f"species_split.csv:{lineno} '{rep}' 에 근거(note)가 없습니다")
+            out.setdefault(rep, set()).add(marker)
+    return out
+
+
+def _find_species(name: str, rep_name: str, splits: dict[str, set[str]]) -> str | None:
+    markers = splits.get(rep_name)
+    if not markers:
+        return None
+    for part in (p.strip() for p in name.split("_")):
+        if part in markers:
+            return part
     return None
 
 
@@ -104,7 +149,14 @@ def _readable(name: str) -> str:
 
 def apply_groups(records, map_path: Path) -> dict[str, int]:
     manual = load_manual(map_path)
-    stats = dict.fromkeys(("조리법있음", "조리법없음", "수동", "단독그룹해제", "부위분리"), 0)
+    splits = load_species_split(map_path.parent / "species_split.csv")
+    stats = dict.fromkeys(
+        ("조리법있음", "조리법없음", "수동", "단독그룹해제", "부위분리", "종분리"), 0)
+
+    # 화면에 쓸 그룹 이름. 그룹 키와 다를 수 있다 —
+    # 키 '호박 단호박' 은 다른 그룹과 겹치지 않기 위한 것이고,
+    # 사람이 부르는 이름은 그냥 '단호박' 이다.
+    labels: dict[int, str] = {}
 
     for r in records:
         if r.name in manual:
@@ -118,9 +170,21 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
             r.method = _find_method(r.name)
             stats["조리법있음" if r.method else "조리법없음"] += 1
 
+            # 종 분리를 부위 분리보다 먼저 — '호박 단호박 잎' 처럼 겹칠 때
+            # 종이 앞에 와야 읽힌다.
+            species = _find_species(r.name, r.rep_name, splits)
+            if species:
+                r.group = f"{r.group} {species}"
+                # 분리된 종은 그 자체로 사람이 쓰는 이름이다 ('단호박', '백미').
+                # '데친 호박 단호박' 이 아니라 '데친 단호박' 이라고 해야 읽힌다.
+                labels[id(r)] = species
+                stats["종분리"] += 1
+
             part = _find_part(r.name)
             if part:
                 r.group = f"{r.group} {part}"
+                # 부위는 홀로 서지 못한다 — '데친 잎' 이 아니라 '데친 호박 잎'.
+                labels[id(r)] = f"{labels.get(id(r), r.rep_name)} {part}"
                 stats["부위분리"] += 1
 
         # 화면용 이름.
@@ -132,16 +196,22 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
         # 부족하다 — '당류에 절인것' 처럼 수식어가 붙은 조각을 '절인것'과
         # 같다고 보면 수식어(당류/소금 등, 당뇨 앱에서 제일 중요한 정보)가
         # display 에서 통째로 사라진다. 정확히 일치할 때만 simple 로 본다.
-        simple = (len(parts) == 2 and parts[0] == r.group
-                  and parts[1].strip() in METHOD_TOKENS)
+        #
+        # 종·부위로 갈린 그룹은 이름이 여러 토막이다('호박_단호박_데친것' →
+        # 그룹 '호박 단호박'). 조리법을 뺀 나머지가 그룹과 정확히 같으면
+        # 그때도 단순형으로 본다.
+        label = labels.get(id(r), r.group)
+        r.group_label = label
+        simple = (len(parts) >= 2 and " ".join(parts[:-1]) == r.group
+                  and parts[-1].strip() in METHOD_TOKENS)
 
         if prefix and simple:
-            r.display = f"{prefix} {r.group}"
-            r.alias.append(f"{prefix}{r.group}")
+            r.display = f"{prefix} {label}"
+            r.alias.append(f"{prefix}{label}")
         else:
             r.display = _readable(r.name)
             if prefix:
-                r.alias.append(f"{prefix}{r.group}")
+                r.alias.append(f"{prefix}{label}")
 
     # 항목이 하나뿐인 그룹은 조리법 비교가 의미 없다 → 그룹만 해제.
     # display 는 그대로 둔다 ('찐 고구마' 는 그룹과 무관하게 좋은 이름이다).

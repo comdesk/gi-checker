@@ -15,9 +15,9 @@ from bundle import (
 )
 from group import PART_PATTERN
 
-LEVELS = {"green", "amber", "red"}
+LEVELS = {"green", "amber", "red", "unknown"}
 KINDS = {"measured", "estimated", "na", "none"}
-REASONS = {"low-carb", "gi", "gi+sweet", "nutrient", "nutrient+sweet"}
+REASONS = {"low-carb", "gi", "gi+sweet", "nutrient", "nutrient+sweet", "insufficient"}
 CATEGORIES = {"채소", "과일", "밥·면·빵", "국·찌개", "고기·생선", "간식·음료", "기타"}
 
 
@@ -422,3 +422,45 @@ def test_100g_기준뿐이면_실제_분량이_없다(bundle):
     for f in bundle["foods"]:
         if f["serving"]["label"].endswith("기준") and f["serving"]["grams"] is None:
             assert f["perServing"] is None, f["name"]
+
+
+# ── 모르는 값 처리 ────────────────────────────────────────────────
+
+def test_당밀은_초록이_아니다(bundle):
+    """당류 칸이 비어 있다고 0으로 찍던 시절 당밀(탄수 68.2g 시럽)이
+    GI 55 로 통과해 '드셔도 좋아요'가 됐다. 다시 그러면 안 된다."""
+    molasses = [f for f in bundle["foods"] if f["name"] == "당밀_가공당"]
+    assert molasses, "당밀이 사라졌다 — 이 회귀 테스트가 무력해졌다"
+    assert molasses[0]["verdict"]["level"] != "green"
+
+
+def test_추정한_항목은_추정이라고_밝힌다(bundle):
+    for f in bundle["foods"]:
+        for key in f["estimated"]:
+            assert key in ("sugar", "fiber", "fat"), f["name"]
+            assert f["nutrients"][key] is not None, \
+                f"{f['name']}: {key} 를 추정했다면서 값이 없다"
+
+
+def test_판정_불가가_적당한_범위다(bundle):
+    """0 이면 구간 판정이 꺼진 것이고(다시 0으로 찍고 있다는 뜻),
+    너무 많으면 앱이 답을 안 하는 것이다. 양쪽 다 실패시킨다."""
+    unknown = [f for f in bundle["foods"] if f["verdict"]["level"] == "unknown"]
+    share = len(unknown) / len(bundle["foods"])
+    assert 0 < share < 0.10, f"판정 불가 {len(unknown)}건 ({share:.1%})"
+
+
+def test_판정_불가는_이유가_붙는다(bundle):
+    for f in bundle["foods"]:
+        if f["verdict"]["level"] == "unknown":
+            assert f["verdict"]["reason"] == "insufficient", f["name"]
+
+
+def test_1회분량_환산은_모르는_값을_지어내지_않는다(bundle):
+    for f in bundle["foods"]:
+        ps = f["perServing"]
+        if not ps:
+            continue
+        for key in ("sugar", "fiber", "fat", "sodium"):
+            if f["nutrients"][key] is None:
+                assert ps[key] is None, f"{f['name']}: {key} 를 모르는데 환산값이 있다"
