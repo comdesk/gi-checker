@@ -6,10 +6,26 @@ const HANGUL_BASE = 0xac00;
 const HANGUL_LAST = 0xd7a3;
 const JUNG_JONG = 588;
 
-const RANK = { exact: 0, group: 1, prefix: 2, substring: 3, chosung: 4, fuzzy: 5 };
+const RANK = {
+  exact: 0, group: 1, prefix: 2, substring: 3, words: 4, chosung: 5, fuzzy: 6,
+};
 
 export function normalizeQuery(text) {
   return String(text ?? '').replace(/[\s,·()[\]/\-_.]+/g, '').toLowerCase();
+}
+
+/**
+ * 질의를 낱말로 쪼갠다. 낱말 하나하나는 normalizeQuery 와 같은 규칙으로 씻는다.
+ *
+ * 사람은 이름을 통째로 외워서 치지 않는다. '조미 오징어' 라고 치면
+ * '오징어 조미하여 구운것' 이 나와야 하는데, 붙여서 '조미오징어' 로 만들어
+ * 부분 일치를 보면 순서가 뒤집혀 있어 못 찾는다.
+ */
+export function queryWords(text) {
+  return String(text ?? '')
+    .split(/[\s,·()[\]/\-_.]+/)
+    .map(w => normalizeQuery(w))
+    .filter(w => w.length > 0);
 }
 
 export function chosungOf(text) {
@@ -48,7 +64,7 @@ function haystacks(food) {
   return [food.search.norm, ...(food.search.alias ?? [])];
 }
 
-function matchKind(query, food) {
+function matchKind(query, words, food) {
   const fields = haystacks(food);
   if (fields.some(h => h === query)) return 'exact';
   // 질의가 이 음식의 대표 이름과 정확히 같으면 '그 음식 자체'다.
@@ -56,11 +72,18 @@ function matchKind(query, food) {
   if (food.group && normalizeQuery(food.group) === query) return 'group';
   if (fields.some(h => h.startsWith(query))) return 'prefix';
   if (fields.some(h => h.includes(query))) return 'substring';
+  // 낱말이 순서와 상관없이 전부 들어 있으면 찾은 것으로 본다.
+  // '조미 오징어' -> '오징어 조미하여 구운것'.
+  // 한 낱말짜리 질의는 위 부분 일치와 결과가 같으므로 건너뛴다.
+  if (words.length >= 2 && fields.some(h => words.every(w => h.includes(w)))) {
+    return 'words';
+  }
   return null;
 }
 
 export function searchFoods(query, foods, limit = 50) {
   const q = normalizeQuery(query);
+  const words = queryWords(query);
   if (!q) return [];
 
   const hits = [];
@@ -71,7 +94,7 @@ export function searchFoods(query, foods, limit = 50) {
     }
   } else {
     for (const food of foods) {
-      const kind = matchKind(q, food);
+      const kind = matchKind(q, words, food);
       if (kind) hits.push({ food, kind });
     }
     // 아무것도 못 찾았을 때만 오타 보정으로 내려간다. 두 글자 이상일 때만.

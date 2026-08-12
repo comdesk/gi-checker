@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from group import PART_MARKERS, _find_method, _find_part, apply_groups
+from group import PART_MARKERS, _find_method, _find_part, apply_groups, sample_tag
 from normalize import load_records
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "raw"
@@ -117,7 +117,18 @@ def test_no_display_collision_within_group_on_real_data():
         if len(nutrient_sets) > 1:
             conflicts.append((group, display, [i.name for i in items]))
 
-    assert conflicts == [], f"display 충돌 {len(conflicts)}건: {conflicts[:5]}"
+    # 시료 표기(수과원의 '대표 7월'·'부산 5월')를 화면 이름에서 떼면서, 같은
+    # 음식을 달마다 잰 레코드들이 여기서는 같은 이름이 된다. 그것은 정상이고
+    # bundle.py 의 merge_same_name 이 최종 단계에서 정리한다 — 답이 같으면
+    # 한 줄로 합치고, 갈리면 시료 표기를 되살린다. 화면에 이름이 겹쳐 나가지
+    # 않는다는 보장은 test_bundle.py 의 test_이름이_겹치는_레코드가_없다 가 한다.
+    #
+    # 여기서 잡아야 할 것은 '시료 차이로 설명되지 않는' 충돌뿐이다
+    # (원래 이 테스트가 잡았던 '말린 국수' 처럼 서로 다른 음식이 같은 이름을
+    #  갖는 경우).
+    real = [c for c in conflicts
+            if len({sample_tag(n) for n in c[2]}) < len(c[2])]
+    assert real == [], f"시료 차이로 설명되지 않는 display 충돌 {len(real)}건: {real[:5]}"
 
 
 # ── Task 11B Step 1: 부위 분리 ──

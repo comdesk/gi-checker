@@ -119,3 +119,43 @@ test('대표 이름이 질의와 같으면 파생 음식보다 앞선다', () =>
   assert.equal(r[0].food.id, '고구마_찐것');
   assert.equal(r[0].kind, 'group');
 });
+
+// ── 낱말 검색 ──────────────────────────────────────────────
+// 사람은 이름을 통째로 외워 치지 않는다. '조미 오징어' 로 찾을 수 있어야 한다.
+
+const squid = {
+  id: '오징어-조미구이', name: '오징어류_오징어_육_조미하여 구운것_대표_평균',
+  display: '오징어 조미하여 구운것', group: '오징어류 육',
+  search: {
+    norm: '오징어류오징어육조미하여구운것대표평균',
+    chosung: 'ㅇㅈㅇㄹㅇㅈㅇㅇㅈㅁㅎㅇㄱㅇㄱㄷㅍㅍㄱ',
+    alias: ['오징어조미하여구운것'],
+  },
+};
+
+test('낱말이 순서가 뒤바뀌어도 찾는다', () => {
+  const r = searchFoods('조미 오징어', [squid]);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].kind, 'words');
+});
+
+test('낱말이 하나라도 없으면 안 찾는다', () => {
+  assert.equal(searchFoods('조미 고등어', [squid]).length, 0);
+});
+
+test('붙여 쓴 부분 일치가 낱말 검색보다 앞선다', () => {
+  const exact = {
+    id: 'a', name: '조미오징어', group: null,
+    search: { norm: '조미오징어', chosung: 'ㅈㅁㅇㅈㅇ', alias: [] },
+  };
+  const r = searchFoods('조미 오징어', [squid, exact]);
+  assert.equal(r[0].food.id, 'a');
+  assert.equal(r[0].kind, 'exact');
+  assert.equal(r[1].kind, 'words');
+});
+
+test('한 낱말 질의는 낱말 검색으로 넓어지지 않는다', () => {
+  // '오징어' 하나만 쳤을 때 기존 부분 일치와 결과가 같아야 한다
+  const r = searchFoods('오징어', [squid]);
+  assert.equal(r[0].kind, 'prefix');   // 이름이 '오징어류…' 로 시작한다
+});

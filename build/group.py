@@ -56,6 +56,10 @@ PART_MARKERS = (
     "육", "알", "내장", "난백", "난황", "관자", "전체",  # 동물성
 )
 
+# 그 음식의 '기본' 부위. 그룹은 갈라야 하지만(육과 알은 다른 음식이다)
+# 화면 이름에 붙이면 어색하다 — '생 오징어류 육' 이 아니라 '생 오징어류'.
+DEFAULT_PARTS = frozenset({"육", "전체"})
+
 # 세그먼트가 부위 표시와 '정확히' 일치할 때만 잡는다('_줄기_', '_잎_' 처럼
 # 밑줄 사이에 있을 때). 괄호 설명은 붙어도 된다 — '줄기(껍질 포함)' 도 줄기다.
 #
@@ -177,9 +181,73 @@ def _find_method(name: str) -> str | None:
     return best_method
 
 
+# 수과원 데이터는 이름 끝에 '어디서 언제 뜬 시료인지' 를 붙여 놓았다.
+#   오징어류_오징어_육_조미하여 구운것_대표_평균
+#   눈볼대_육_생것_남해_11월
+# '대표 평균' 은 대표 시료를 여러 달 평균 냈다는 뜻이고 '남해 11월' 은 채집지와
+# 시기다. 음식 이름이 아니라 시료 표기이므로 화면에서는 뗀다 — 원본 표기는
+# 영양성분 상자의 '원본' 줄에 그대로 남으므로 정보가 사라지지는 않는다.
+_SAMPLE_TIME = re.compile(r"^(평균|\d{1,2}월)$")
+# 시기 바로 앞에 오는 채집지. 실측으로 967건 전수를 확인해 뽑았다.
+# '대구'·'기장'·'진주' 는 음식 이름이기도 하지만(대구, 기장, 진주조개) 이 자리에
+# 올 때는 전부 지명이었고, 음식 이름은 앞 조각에 따로 남아 있다.
+_SAMPLE_PLACE = {
+    "대표", "수입", "부산", "여수", "포항", "통영", "완도", "진안", "남해", "강릉",
+    "삼천포", "제주", "진주", "인천", "경기", "창원", "거제", "신안", "군산", "해남",
+    "충무", "양양", "영덕", "진해", "문경", "대구", "금산", "광양", "대전", "거문도",
+    "자란도", "율촌", "춘천", "영암", "기장", "울릉도", "보령", "가평(청평)",
+}
+_SAMPLE_PLACE_RE = re.compile(r"^수입\(.+\)$")
+
+
+def strip_sample_tag(name: str) -> str:
+    """이름 끝의 시료 표기(채집지·시기)를 뗀다. 뗄 게 없으면 그대로.
+
+    최소 두 조각은 남긴다 — 다 떼어내고 이름이 사라지면 안 된다.
+    """
+    parts = [p.strip() for p in name.split("_") if p.strip()]
+    if len(parts) >= 3 and _SAMPLE_TIME.match(parts[-1]):
+        parts = parts[:-1]
+        if (len(parts) >= 3
+                and (parts[-1] in _SAMPLE_PLACE or _SAMPLE_PLACE_RE.match(parts[-1]))):
+            parts = parts[:-1]
+    return "_".join(parts)
+
+
+def sample_tag(name: str) -> str:
+    """strip_sample_tag 가 떼어낸 부분('대표 7월', '부산 5월'). 없으면 빈 문자열.
+
+    답이 갈리는 시료를 화면에 나란히 놓아야 할 때 이름을 되살리는 데 쓴다.
+    """
+    kept = strip_sample_tag(name)
+    rest = name[len(kept):].strip("_")
+    return rest.replace("_", " ").strip()
+
+
+def _drop_redundant_class(parts: list[str]) -> list[str]:
+    """'오징어류_오징어_...' 의 앞머리를 뗀다.
+
+    원본은 분류군('~류')과 실제 종을 나란히 적어 놓았다. 사람이 읽을 때는
+    종 이름만 있으면 된다.
+        오징어류 오징어 육 구운것  ->  오징어 육 구운것
+        장어류 뱀장어 육 ...      ->  뱀장어 육 ...
+    종이 분류군과 다른 이름이면(오징어류 한치) 그대로 둘 수도 있지만, 그때도
+    '한치' 만으로 충분히 알아본다 — 어차피 분류군은 검색용 원본에 남는다.
+    """
+    if len(parts) >= 3 and parts[0].endswith("류") and len(parts[0]) >= 2:
+        return parts[1:]
+    return parts
+
+
 def _readable(name: str) -> str:
     """원본 표기를 사람이 읽을 수 있게. '_' 는 공백으로."""
-    return re.sub(r"\s+", " ", name.replace("_", " ")).strip()
+    parts = _drop_redundant_class(
+        [p for p in strip_sample_tag(name).split("_") if p])
+    # '육'·'전체' 는 기본 부위라 이름에 넣으면 어색하다 ('멸치 전체 쪄서 말린것').
+    # 그룹은 이미 갈라져 있으므로 이름에서 빼도 헷갈리지 않는다.
+    if len(parts) >= 3:
+        parts = [p for p in parts if p not in DEFAULT_PARTS] or parts
+    return re.sub(r"\s+", " ", " ".join(parts)).strip()
 
 
 def apply_groups(records, map_path: Path) -> dict[str, int]:
@@ -223,14 +291,19 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
             if part:
                 r.group = f"{r.group} {part}"
                 # 부위는 홀로 서지 못한다 — '데친 잎' 이 아니라 '데친 호박 잎'.
-                labels[id(r)] = f"{labels.get(id(r), r.rep_name)} {part}"
+                # 단 '육'·'전체' 는 그 음식의 기본 상태라 이름에 붙이면 어색하다
+                # ('생 오징어류 육'). 그룹 키는 그대로 두고 이름에서만 뺀다.
+                base = labels.get(id(r), r.rep_name)
+                labels[id(r)] = base if part in DEFAULT_PARTS else f"{base} {part}"
                 stats["부위분리"] += 1
 
         # 화면용 이름.
         #   '고구마_찐것' (대표식품명 + 조리법뿐) → '찐 고구마'
         #   '소고기_수입산(미국산)_설도_구운것(석쇠)' → 정보가 많으므로 원본을 읽기 좋게만
         prefix = METHOD_PREFIX.get(r.method) if r.method else None
-        parts = [p for p in r.name.split("_") if p]
+        # 시료 표기를 뗀 뒤에 본다 — '오징어_육_구운것_대표_평균' 의 마지막
+        # 조각은 '평균' 이라 그대로 두면 어떤 이름도 단순형으로 인정되지 않는다.
+        parts = [p for p in strip_sample_tag(r.name).split("_") if p]
         # 리뷰 Critical 2: 두 번째 조각이 조리법 표기를 '포함'하는 것만으로는
         # 부족하다 — '당류에 절인것' 처럼 수식어가 붙은 조각을 '절인것'과
         # 같다고 보면 수식어(당류/소금 등, 당뇨 앱에서 제일 중요한 정보)가

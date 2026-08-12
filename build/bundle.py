@@ -9,7 +9,7 @@ from pathlib import Path
 from statistics import quantiles
 
 from gi_match import apply_gi
-from group import METHOD_PREFIX, METHOD_TOKENS, apply_groups
+from group import METHOD_PREFIX, METHOD_TOKENS, apply_groups, sample_tag
 from normalize import apply_nutrient_fixes, fill_missing, load_records
 from score import judge
 
@@ -171,6 +171,82 @@ def _too_spread_to_merge(carbs: list[float]) -> bool:
     return carb_max / carb_min >= CARB_RATIO_LIMIT
 
 
+def _add_alias(food: dict) -> None:
+    """화면 이름을 바꿨으면 그 이름으로도 검색돼야 한다.
+    (단위 테스트의 최소 dict 에는 search 가 없다 — 있을 때만 손댄다)"""
+    search = food.get("search")
+    norm = search_norm(food["display"])
+    if search and norm and norm != search["norm"] and norm not in search["alias"]:
+        search["alias"] = sorted(search["alias"] + [norm])
+
+
+def merge_same_name(foods: list[dict], groups: dict[str, list[str]]):
+    """이름이 같아진 레코드를 정리한다.
+
+    수과원 데이터는 같은 음식을 달마다·지역마다 따로 실어 놓았다. 화면 이름에서
+    시료 표기를 떼고 나면 '붕장어 생것' 이 15줄로 겹친다. 앞선 merge_variants 는
+    (그룹·조리법·양념) 묶음 전체의 답이 하나로 모여야 합치는데, 같은 묶음에
+    붕장어·갯장어·뱀장어가 함께 있어 답이 갈리면 아무것도 합쳐지지 않는다.
+
+    여기서는 **이름이 같은 것끼리만** 본다.
+      답이 같다  -> 한 줄로 합치고 시료 목록을 variants 에 남긴다
+      답이 다르다 -> 합치지 않고, 대신 시료 표기를 이름에 되살려 구분되게 한다
+                   ('갈치 생것' 이 초록과 빨강 두 줄로 나오면 어느 쪽인지
+                    알 수 없다 — '갈치 생것 (대표 10월)' 로 되살린다)
+    """
+    by_name: dict[str, list[dict]] = defaultdict(list)
+    for f in foods:
+        by_name[f["display"]].append(f)
+
+    removed_ids: set[str] = set()
+    merged = restored = 0
+
+    for display, items in by_name.items():
+        if len(items) < 2:
+            continue
+        answers = {(f["gi"]["value"], f["verdict"]["level"]) for f in items}
+        carbs = [f["nutrients"]["carb"] for f in items]
+
+        if len(answers) == 1 and not _too_spread_to_merge(carbs):
+            rep = min(items, key=lambda f: (len(f["name"]), f["name"]))
+            tags = sorted({t for f in items if (t := sample_tag(f["name"]))})
+            if len(tags) >= 2:
+                rep["variants"] = sorted(set(rep.get("variants", [])) | set(tags))
+            for f in items:
+                if f is not rep:
+                    removed_ids.add(f["id"])
+            merged += len(items) - 1
+        else:
+            # 답이 갈린다. 어느 쪽이 어느 시료인지 밝혀야 고를 수 있다.
+            for f in items:
+                tag = sample_tag(f["name"])
+                if tag:
+                    f["display"] = f"{display} ({tag})"
+                    _add_alias(f)
+                    restored += 1
+
+    kept = [f for f in foods if f["id"] not in removed_ids]
+
+    # 시료 표기를 되살려도 여전히 겹치는 것이 있다. 부위('육'·'전체')를 이름에서
+    # 뺐기 때문인데('굴 육 생것'과 '굴 전체 생것'이 둘 다 '굴 생것'), 답이 갈리는
+    # 마당에 구분이 안 되면 고를 수가 없다. 이때는 그룹 이름으로 가른다.
+    still: dict[str, list[dict]] = defaultdict(list)
+    for f in kept:
+        still[f["display"]].append(f)
+    for display, items in still.items():
+        if len(items) < 2:
+            continue
+        for f in items:
+            if f["group"] and f["group"] != display:
+                f["display"] = f"{display} [{f['group']}]"
+                _add_alias(f)
+                restored += 1
+
+    for ids in groups.values():
+        ids[:] = [i for i in ids if i not in removed_ids]
+    return kept, {"merged": merged, "restored": restored}
+
+
 def merge_variants(foods: list[dict], groups: dict[str, list[str]],
                    labels: dict[str, str] | None = None):
     """답(gi.value·verdict.level)이 완전히 같은 (group, method) 묶음을 한 줄로 합친다.
@@ -239,12 +315,7 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]],
         # 단 조리법 자체가 절이기면 '절인 배추 (소금 절임)' 처럼 겹쳐 읽힌다.
         show_season = seasoning and method != "절이기"
         rep["display"] = f"{base} ({seasoning})" if show_season else base
-        # 이름을 바꿨으면 그 이름으로도 검색돼야 한다.
-        # (단위 테스트의 최소 dict 에는 search 가 없다 — 있을 때만 손댄다)
-        search = rep.get("search")
-        norm = search_norm(rep["display"])
-        if search and norm and norm != search["norm"] and norm not in search["alias"]:
-            search["alias"] = sorted(search["alias"] + [norm])
+        _add_alias(rep)
 
         variants = []
         for f in items:
@@ -381,6 +452,9 @@ def build(base: Path):
     before_total = len(foods)
     group_labels = {r.id: r.group_label for r in records if r.group_label}
     foods, merge_reports, merge_skipped = merge_variants(foods, groups, group_labels)
+    # 이름이 같아진 것(시료만 다른 같은 음식) 정리는 그 다음이다 —
+    # merge_variants 가 먼저 이름을 확정해야 무엇이 겹치는지 알 수 있다.
+    foods, samename_stats = merge_same_name(foods, groups)
     merged_records = before_total - len(foods)
 
     # 신호등·GI 표시 상태 분포는 합치기 이후(실제로 화면에 보이는 레코드) 기준으로
@@ -410,6 +484,7 @@ def build(base: Path):
         "sodium_caution": sodium_caution_count,
         "package": package_count, "sodium_none": sodium_none_count,
         "fill": fill_stats, "nutrient_fix": fixed_count,
+        "samename": samename_stats,
         "merge": {
             "before_total": before_total, "after_total": len(foods),
             "merged_records": merged_records, "bundles": len(merge_reports),

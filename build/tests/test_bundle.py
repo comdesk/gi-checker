@@ -136,13 +136,34 @@ def test_같은_그룹_같은_조리법_같은_양념이면_답도_같다(bundle
     # 여기서는 '같은 답인데 여러 개 남아 있는' 경우가 없는지만 본다 —
     # 단, 영양성분 편차가 커서 의도적으로 합치지 않은 예외(merge_variants 의
     # _too_spread_to_merge)는 답이 같아도 여러 건이 남는 것이 정상이므로 제외한다.
+    #
+    # merge_same_name 이 그 뒤에 한 번 더 돌면서 같은 이름끼리 정리하는데, 그때
+    # 레코드가 빠지면서 원래 답이 갈렸던 묶음이 하나로 모이는 경우가 생긴다
+    # (고둥류 전체/생것: 4종이 남았고 답은 같다). 이들은 서로 다른 종이라
+    # 합치지 않는 것이 맞으므로 소수는 허용하되, 수가 불어나면 실패시킨다.
+    leftovers = []
     for (g, m, s), answers in seen.items():
         same = [f for f in bundle["foods"]
                 if f["group"] == g and f["method"] == m and f.get("seasoning") == s]
         if len(answers) == 1 and len(same) > 1:
             carbs = [f["nutrients"]["carb"] for f in same]
-            assert _too_spread_to_merge(carbs), \
-                f"{g}/{m}/{s}: 답이 같은데 {len(same)}건이 남아 있다 (편차로 설명되지 않음)"
+            if not _too_spread_to_merge(carbs):
+                leftovers.append((g, m, s, [f["display"] for f in same]))
+    assert len(leftovers) <= 3, \
+        f"답이 같은데 안 합쳐진 묶음이 {len(leftovers)}개다: {leftovers[:5]}"
+    # 남더라도 사용자가 서로 구분은 할 수 있어야 한다.
+    for g, m, s, displays in leftovers:
+        assert len(set(displays)) == len(displays), f"{g}/{m}: 이름이 겹친다 {displays}"
+
+
+def test_이름이_겹치는_레코드가_없다(bundle):
+    """같은 이름이 두 줄로 나오면 사용자는 어느 쪽을 봐야 할지 알 수 없다.
+    수과원 데이터는 같은 음식을 달마다 실어 놓았고 화면 이름에서 시료 표기를
+    떼기 때문에, merge_same_name 이 정리하지 않으면 '붕장어 생것' 이 15줄로 나온다."""
+    import collections
+    dup = {name: n for name, n in
+           collections.Counter(f["display"] for f in bundle["foods"]).items() if n > 1}
+    assert dup == {}, f"이름이 겹치는 것 {len(dup)}가지: {list(dup.items())[:5]}"
 
 
 def test_양념한_것이_안_한_것_안에_숨지_않는다(bundle):
