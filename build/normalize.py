@@ -72,6 +72,9 @@ class FoodRecord:
     # 겹치지 않기 위한 것이고, 사람이 부르는 이름은 '단호박' 이다.
     group_label: str | None = None
     method: str | None = None
+    # 양념·절임 표기('양념', '설탕 절임' 등). 같은 조리법이라도 양념이 붙으면
+    # 다른 음식이라 조리법 비교에서 따로 세워야 한다.
+    seasoning: str | None = None
     gi_value: float | None = None
     gi_kind: str = "none"
     gi_basis: str | None = None

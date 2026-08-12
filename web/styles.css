@@ -174,3 +174,16 @@ details.more summary::-webkit-details-marker{display:none}
 .est{display:inline-block;margin-left:7px;padding:2px 7px;border-radius:5px;
      background:var(--line);color:var(--ink3);font-size:12px;font-weight:800;
      vertical-align:middle}
+
+/* ── 양념 고지 ──
+   경고(.caution)가 아니라 사실 고지다. 빨강을 쓰면 나트륨 경고와 헷갈린다. */
+.season{display:flex;gap:11px;align-items:flex-start;margin:18px 22px 0;
+        padding:15px 17px;border-radius:14px;
+        background:#f5f7fa;border:1.5px solid var(--line)}
+.season-ic{font-size:20px;line-height:1.3;flex:none}
+.season p{margin:0;font-size:17px;line-height:1.55;color:var(--ink2)}
+.season b{color:var(--ink);font-weight:800}
+/* 조리법 비교 줄에서 '굽기' 옆에 붙는 작은 표. */
+.seasontag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:99px;
+           background:#e9edf2;color:var(--ink2);font-size:13px;font-weight:800;
+           vertical-align:middle}

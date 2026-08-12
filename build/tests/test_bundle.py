@@ -120,26 +120,39 @@ def test_합쳐진_것들은_답이_같았다(bundle):
             assert len(f["variants"]) >= 2, f["display"]
 
 
-def test_같은_그룹_같은_조리법이면_답도_같다(bundle):
-    """합치기 후에는 (group, method) 안에서 답이 갈리면 안 된다.
-    갈린다면 합치기 조건이 잘못 적용된 것이다."""
+def test_같은_그룹_같은_조리법_같은_양념이면_답도_같다(bundle):
+    """합치기 후에는 (group, method, seasoning) 안에서 답이 갈리면 안 된다.
+    갈린다면 합치기 조건이 잘못 적용된 것이다.
+
+    양념까지 키에 넣는 이유: '조미하여 말린것'(0.4g)과 '말린것'(0.2g)은 답이
+    같지만 합치면 안 된다. 합치는 순간 양념이 붙었다는 사실이 화면에서 사라진다."""
     import collections
     seen = collections.defaultdict(set)
     for f in bundle["foods"]:
         if f["group"] and f["method"]:
-            seen[(f["group"], f["method"])].add(
+            seen[(f["group"], f["method"], f.get("seasoning"))].add(
                 (f["gi"]["value"], f["verdict"]["level"]))
     # 답이 다르면 합치지 않았어야 하므로 여러 레코드가 남는 것이 정상이다.
     # 여기서는 '같은 답인데 여러 개 남아 있는' 경우가 없는지만 본다 —
     # 단, 영양성분 편차가 커서 의도적으로 합치지 않은 예외(merge_variants 의
     # _too_spread_to_merge)는 답이 같아도 여러 건이 남는 것이 정상이므로 제외한다.
-    for (g, m), answers in seen.items():
+    for (g, m, s), answers in seen.items():
         same = [f for f in bundle["foods"]
-                if f["group"] == g and f["method"] == m]
+                if f["group"] == g and f["method"] == m and f.get("seasoning") == s]
         if len(answers) == 1 and len(same) > 1:
             carbs = [f["nutrients"]["carb"] for f in same]
             assert _too_spread_to_merge(carbs), \
-                f"{g}/{m}: 답이 같은데 {len(same)}건이 남아 있다 (편차로 설명되지 않음)"
+                f"{g}/{m}/{s}: 답이 같은데 {len(same)}건이 남아 있다 (편차로 설명되지 않음)"
+
+
+def test_양념한_것이_안_한_것_안에_숨지_않는다(bundle):
+    """조미 오징어(26.6g)와 그냥 구운 오징어(0.1g)가 한 줄로 합쳐지면
+    26g 이 양념 몫이라는 사실이 사라진다."""
+    squid = [f for f in bundle["foods"] if f["group"] == "오징어류 육"]
+    grilled = [f for f in squid if f["method"] == "굽기"]
+    assert len(grilled) >= 2, [f["name"] for f in grilled]
+    assert {f.get("seasoning") for f in grilled} == {None, "양념"}, \
+        [(f["name"], f.get("seasoning")) for f in grilled]
 
 
 def test_그룹_구성원이_모두_실재한다(bundle):

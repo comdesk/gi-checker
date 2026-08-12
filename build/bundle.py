@@ -193,16 +193,19 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]],
 
     반환: (합쳐진 foods 리스트, 리포트 목록 — 편차 검증용).
     """
-    buckets: dict[tuple[str, str], list[dict]] = {}
+    # 양념 여부까지 키에 넣는다. 안 그러면 '조미하여 말린것'(0.4g)이 답이 같다는
+    # 이유로 '말린것'(0.2g) 안에 숨어 사라진다 — 양념이 붙었다는 사실이 지워진다.
+    buckets: dict[tuple, list[dict]] = {}
     for f in foods:
         if f["group"] and f["method"]:
-            buckets.setdefault((f["group"], f["method"]), []).append(f)
+            buckets.setdefault(
+                (f["group"], f["method"], f.get("seasoning")), []).append(f)
 
     removed_ids: set[str] = set()
     reports = []
     skipped = []
 
-    for (group, method), items in buckets.items():
+    for (group, method, seasoning), items in buckets.items():
         if len(items) < 2:
             continue
         answers = {(f["gi"]["value"], f["verdict"]["level"]) for f in items}
@@ -230,7 +233,18 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]],
         # '데친 애호박'. labels 가 없으면(단위 테스트) 키를 그대로 쓴다.
         label = (labels or {}).get(rep["id"], group)
         prefix = METHOD_PREFIX.get(method)
-        rep["display"] = f"{prefix} {label}" if prefix else label
+        base = f"{prefix} {label}" if prefix else label
+        # 양념 표기를 지우면 안 된다 — '조미하여 구운 오징어' 가 '구운 오징어' 로
+        # 둔갑해 탄수화물 26.6g 이 조리법 탓처럼 보인다.
+        # 단 조리법 자체가 절이기면 '절인 배추 (소금 절임)' 처럼 겹쳐 읽힌다.
+        show_season = seasoning and method != "절이기"
+        rep["display"] = f"{base} ({seasoning})" if show_season else base
+        # 이름을 바꿨으면 그 이름으로도 검색돼야 한다.
+        # (단위 테스트의 최소 dict 에는 search 가 없다 — 있을 때만 손댄다)
+        search = rep.get("search")
+        norm = search_norm(rep["display"])
+        if search and norm and norm != search["norm"] and norm not in search["alias"]:
+            search["alias"] = sorted(search["alias"] + [norm])
 
         variants = []
         for f in items:
@@ -331,6 +345,9 @@ def build(base: Path):
             **({"groupLabel": r.group_label}
                if r.group and r.group_label and r.group_label != r.group else {}),
             "method": r.method,
+            # 양념·절임 표기. 있으면 화면에 반드시 밝힌다 — 탄수화물이 조리법
+            # 탓인지 양념 탓인지 사용자가 알아야 한다.
+            **({"seasoning": r.seasoning} if r.seasoning else {}),
             "category": r.category,
             "serving": {"label": r.serving_label, "grams": r.serving_grams,
                         "isPackage": packaged},

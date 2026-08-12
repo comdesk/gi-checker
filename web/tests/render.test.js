@@ -149,3 +149,45 @@ test('groupLabel 이 없으면 group 을 그대로 쓴다', () => {
   const html = detailScreen(food, [food, base({ id: 'y', method: '생것' })]);
   assert.ok(html.includes('고구마'), html);
 });
+
+// ── 양념 고지 ────────────────────────────────────────────────
+// 조미 오징어 26.6g / 그냥 구운 오징어 0.1g. 그 26g 은 오징어가 아니라 양념이다.
+
+const seasoned = (o = {}) => base({
+  id: 's', display: '조미하여 구운 오징어', group: '오징어류 육', method: '굽기',
+  seasoning: '양념',
+  nutrients: { kcal: 200, carb: 26.6, sugar: 12, fiber: 0.5, fat: 2, sodium: 900 },
+  verdict: { level: 'red', reason: 'nutrient' },
+  ...o,
+});
+const plain = (o = {}) => base({
+  id: 'p', display: '구운 오징어', group: '오징어류 육', method: '굽기',
+  nutrients: { kcal: 100, carb: 0.1, sugar: 0, fiber: 0, fat: 1, sodium: 300 },
+  verdict: { level: 'green', reason: 'low-carb' },
+  ...o,
+});
+
+test('양념이 되어 있으면 상세에서 밝힌다', () => {
+  const html = detailScreen(seasoned(), null);
+  assert.ok(html.includes('양념이 되어 있습니다'), html);
+  assert.ok(html.includes('26.6g'), '얼마가 양념 몫일 수 있는지 말해야 한다');
+});
+
+test('양념 안 한 것에는 고지가 없다', () => {
+  assert.ok(!detailScreen(plain(), null).includes('양념이 되어 있습니다'));
+});
+
+test('조리법 비교에서 양념한 것과 안 한 것이 같은 칸에 묻히지 않는다', () => {
+  const members = [plain(), seasoned()];
+  const html = detailScreen(seasoned(), members);
+  // 굽기 두 줄이 다 나와야 한다 — 하나만 나오면 앱이 둘 중 하나를 임의로 고른 것이다
+  assert.equal((html.match(/굽기/g) ?? []).length, 2, html);
+  // 비교 줄은 GI 와 신호등을 보여준다. 두 답이 다 보여야 비교가 된다.
+  assert.ok(html.includes('좋음'), '양념 안 한 것의 답이 보여야 비교가 된다');
+  assert.ok(html.includes('피하기'), html);
+});
+
+test('목록에서도 양념 여부가 보인다', () => {
+  assert.ok(listItem(seasoned()).includes('양념'));
+  assert.ok(!listItem(plain()).includes('양념'));
+});

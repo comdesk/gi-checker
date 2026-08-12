@@ -84,6 +84,41 @@ def _find_part(name: str) -> str | None:
     return None
 
 
+# 양념·조미 표기. 같은 재료·같은 조리법이라도 양념이 붙으면 다른 음식이다.
+#
+#   오징어_육_구운것          탄수  0.1g  초록
+#   오징어_육_조미하여 구운것    탄수 26.6g  빨강   ← 26g 이 전부 양념이다
+#
+# 이것을 한 칸('굽기')에 넣으면 앱이 둘 중 하나만 골라 보여주게 되고,
+# "오징어는 구우면 안 된다" 또는 "구워도 괜찮다" 중 아무 말이나 하게 된다.
+# 양념 여부를 조리법과 함께 키로 써서 두 줄로 나란히 보이게 한다.
+#
+# 긴 표기를 먼저 둔다 — '당류에 절인것' 이 '절인것' 보다 먼저 걸려야 한다.
+SEASONING_WORDS = [
+    ("당류를 가한", "설탕 넣음"),
+    ("당류에 절인", "설탕 절임"),
+    ("조미", "양념"),
+    ("양념", "양념"),
+    ("튀김옷", "튀김옷"),
+    ("소금에 절인", "소금 절임"),
+    ("간장에 절인", "간장 절임"),
+    ("식초에 절인", "식초 절임"),
+]
+
+
+def _find_seasoning(name: str) -> str | None:
+    """이름에 양념·절임 표기가 있으면 화면에 쓸 짧은 말로 돌려준다.
+
+    '통조림' 의 '조림' 처럼 다른 낱말에 묻힌 것은 잡지 않는다 — 위 목록의
+    표기들은 전부 두 글자 이상이고 다른 낱말의 일부로 나타나지 않는다
+    (실측 확인: '조미' 25건·'양념' 48건 모두 진짜 양념 표기였다).
+    """
+    for word, label in SEASONING_WORDS:
+        if word in name:
+            return label
+    return None
+
+
 def load_species_split(path: Path) -> dict[str, set[str]]:
     """대표식품명 아래에 사실 서로 다른 음식이 묶여 있는 경우의 분리 목록.
 
@@ -151,7 +186,8 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
     manual = load_manual(map_path)
     splits = load_species_split(map_path.parent / "species_split.csv")
     stats = dict.fromkeys(
-        ("조리법있음", "조리법없음", "수동", "단독그룹해제", "부위분리", "종분리"), 0)
+        ("조리법있음", "조리법없음", "수동", "단독그룹해제",
+         "부위분리", "종분리", "양념표기"), 0)
 
     # 화면에 쓸 그룹 이름. 그룹 키와 다를 수 있다 —
     # 키 '호박 단호박' 은 다른 그룹과 겹치지 않기 위한 것이고,
@@ -159,6 +195,9 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
     labels: dict[int, str] = {}
 
     for r in records:
+        r.seasoning = _find_seasoning(r.name)
+        if r.seasoning:
+            stats["양념표기"] += 1
         if r.name in manual:
             # 수동 지정은 사람이 이미 판단을 끝낸 예외다 — 부위 분리로 다시
             # 건드리지 않는다(현재 두 항목 다 부위 표시가 없어 영향은 없지만,
