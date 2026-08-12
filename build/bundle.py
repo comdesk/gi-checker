@@ -29,7 +29,7 @@ SODIUM_CAUTION_MG = 1400
 # 이 번들의 판. foods.json 과 sw.js 가 같은 값을 쓴다 — 서비스워커는 자기 파일
 # 내용이 바뀌어야 새로 설치되므로, 데이터를 갱신했으면 여기를 올려야 사용자에게
 # 전달된다. stamp_service_worker() 가 sw.js 에 박아 넣는다.
-BUILD_VERSION = "2026-08-12"
+BUILD_VERSION = "2026-08-13"
 
 # 1인분으로 보기엔 너무 큰 포장. 이 이상이면서 밀키트 이름 표시가 있는 경우에만
 # perServing(1회 분량) 계산과 나트륨 주의를 건너뛴다.

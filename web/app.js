@@ -1,6 +1,7 @@
 import { loadFoods, byCategory, foodById, groupMembers } from './data.js';
 import { searchFoods } from './search.js';
 import { listItem, matchHint, displayName, detailScreen, esc } from './render.js';
+import { createNav } from './nav.js';
 
 const shell = document.getElementById('shell');
 const title = document.getElementById('title');
@@ -16,11 +17,10 @@ const CATEGORIES = [
 ];
 
 let bundle = null;
-// 상세에서 뒤로 갈 때 온 곳으로 되돌아가야 한다.
-// 검색으로 왔으면 그 검색 결과로, 카테고리로 왔으면 그 카테고리로.
-// showDetail 은 이 값을 건드리지 않는다 — 조리법 항목을 눌러 상세끼리
-// 이동해도 원래 온 곳을 잊으면 안 된다.
-let lastScreen = { kind: 'home' };   // {kind:'home'} | {kind:'list', query} | {kind:'category', name}
+
+// 화면 이동은 전부 nav 를 거친다. 직접 그리는 함수를 부르면 방문 기록이
+// 안 쌓여서 폰의 뒤로가기 버튼이 앱을 꺼버린다.
+let nav = null;
 
 // ── 즐겨찾기 (localStorage 를 못 쓰면 조용히 비활성) ──
 const FAV_KEY = 'diabetes-food:recent';
@@ -43,29 +43,34 @@ function pushRecent(id) {
 function mountShell() {
   input.addEventListener('input', () => {
     const q = input.value.trim();
-    if (q) showList(q);
-    else showHome();
+    nav.go(q ? { kind: 'list', query: q } : { kind: 'home' });
   });
   clearBtn.addEventListener('click', () => {
-    showHome();
+    nav.go({ kind: 'home' });
     input.focus();
   });
 }
 
+// 검색창에 글자를 되돌려 넣는다. 사용자가 치고 있는 중이면 건드리지 않는다 —
+// 한글은 조합 중인 글자가 input.value 안에 들어 있어서, 같은 값을 다시 써도
+// 조합이 끊긴다.
+function syncInput(text) {
+  if (input.value.trim() !== text) input.value = text;
+}
+
 function wireItems() {
-  screen.querySelectorAll('.item[data-id]').forEach(el =>
-    el.addEventListener('click', () => showDetail(el.dataset.id)));
+  screen.querySelectorAll('[data-id]').forEach(el =>
+    el.addEventListener('click', () => nav.go({ kind: 'detail', id: el.dataset.id })));
 }
 
 // ── 첫 화면 ──
-function showHome() {
+function paintHome() {
   shell.classList.remove('hidden', 'compact');
   searchBox.classList.remove('hidden');
   clearBtn.classList.add('hidden');
   subtitle.classList.remove('hidden');
   title.textContent = '이거 먹어도 돼요?';
-  input.value = '';
-  lastScreen = { kind: 'home' };
+  syncInput('');
 
   const recent = readRecent()
     .map(id => bundle.foods.find(f => f.id === id))
@@ -95,23 +100,20 @@ function showHome() {
       참고용입니다. 치료나 식단은 담당 의사·영양사와 상의하세요.
     </p>`;
 
-  screen.querySelectorAll('[data-id]').forEach(el =>
-    el.addEventListener('click', () => showDetail(el.dataset.id)));
+  wireItems();
   screen.querySelectorAll('[data-cat]').forEach(el =>
-    el.addEventListener('click', () => showCategory(el.dataset.cat)));
-
-  window.scrollTo(0, 0);
+    el.addEventListener('click', () => nav.go({ kind: 'category', name: el.dataset.cat })));
 }
 
 // ── 검색 결과 목록 ──
-function showList(query) {
+function paintList(query) {
   shell.classList.remove('hidden');
   shell.classList.add('compact');
   searchBox.classList.remove('hidden');
   clearBtn.classList.remove('hidden');
   subtitle.classList.add('hidden');
   title.textContent = '이거 먹어도 돼요?';
-  lastScreen = { kind: 'list', query };
+  syncInput(query);
 
   const hits = searchFoods(query, bundle.foods, 50);
 
@@ -122,8 +124,8 @@ function showList(query) {
         <p>이름을 조금 줄여서 쳐보세요.<br>예: "된장찌개" → "된장"</p>
         <button class="btn" id="tohome">카테고리에서 찾기</button>
       </div>`;
-    document.getElementById('tohome').addEventListener('click', () => showHome());
-    window.scrollTo(0, 0);
+    document.getElementById('tohome')
+      .addEventListener('click', () => nav.go({ kind: 'home' }));
     return;
   }
 
@@ -133,14 +135,12 @@ function showList(query) {
     + `<div class="list">${hits.map(h => listItem(h.food)).join('')}</div>`;
 
   wireItems();
-  window.scrollTo(0, 0);
 }
 
 // ── 카테고리 목록 ──
-function showCategory(category) {
+function paintCategory(category, backLabel) {
   shell.classList.add('hidden');
   searchBox.classList.add('hidden');
-  lastScreen = { kind: 'category', name: category };
 
   const foods = byCategory(bundle, category)
     .sort((a, b) => {
@@ -150,34 +150,52 @@ function showCategory(category) {
     .slice(0, 200);
 
   screen.innerHTML = `
-    <button class="nav" id="back"><span class="back">‹</span> 처음으로</button>
+    <button class="nav" id="back"><span class="back">‹</span> ${esc(backLabel ?? '처음으로')}</button>
     <header class="brand" style="padding-top:0"><h1>${esc(category)}</h1></header>
     <p class="cnt">${foods.length}개</p>
     <div class="list">${foods.map(listItem).join('')}</div>`;
 
-  document.getElementById('back').addEventListener('click', () => showHome());
+  document.getElementById('back').addEventListener('click', () => nav.back());
   wireItems();
-  window.scrollTo(0, 0);
 }
 
 // ── 상세 화면 ──
-function showDetail(id) {
+function paintDetail(id, backLabel) {
   const food = foodById(bundle, id);
-  if (!food) { showHome(); return; }
+  if (!food) { paintHome(); return; }
 
   pushRecent(id);
   shell.classList.add('hidden');          // 상세에서는 검색창을 감춘다
   searchBox.classList.add('hidden');      // DOM 에서 제거하지 않는다 (조합 상태 보존)
-  screen.innerHTML = detailScreen(food, groupMembers(bundle, food));
-  window.scrollTo(0, 0);
+  screen.innerHTML = detailScreen(food, groupMembers(bundle, food), backLabel);
 
-  document.getElementById('back').addEventListener('click', () => {
-    if (lastScreen.kind === 'list') showList(lastScreen.query);
-    else if (lastScreen.kind === 'category') showCategory(lastScreen.name);
-    else showHome();
-  });
+  // 화면 위의 '‹' 버튼과 폰의 뒤로가기 버튼은 같은 동작이어야 한다.
+  // 둘이 다른 곳으로 가면 어느 쪽을 눌렀는지에 따라 결과가 달라진다.
+  document.getElementById('back').addEventListener('click', () => nav.back());
   screen.querySelectorAll('.way[data-id]').forEach(el =>
-    el.addEventListener('click', () => showDetail(el.dataset.id)));
+    el.addEventListener('click', () => nav.go({ kind: 'detail', id: el.dataset.id })));
+}
+
+// nav 가 상태 하나를 넘겨주면 그 화면을 그린다. 방문 기록은 nav 가 관리하므로
+// 여기서는 그리기만 한다.
+function paint(state, scrollY) {
+  if (state.kind === 'list') paintList(state.query);
+  else if (state.kind === 'category') paintCategory(state.name, state.back);
+  else if (state.kind === 'detail') paintDetail(state.id, state.back);
+  else paintHome();
+  window.scrollTo(0, scrollY);
+}
+
+// 뒤로가기 버튼에 쓸 "돌아갈 곳" 이름.
+function labelOf(state) {
+  if (!state) return null;
+  if (state.kind === 'list') return '검색으로';
+  if (state.kind === 'category') return state.name;
+  if (state.kind === 'detail') {
+    const food = foodById(bundle, state.id);
+    return food ? displayName(food) : '뒤로';
+  }
+  return '처음으로';
 }
 
 // ── 오프라인 ──
@@ -193,8 +211,21 @@ function registerOffline() {
 async function start() {
   try {
     bundle = await loadFoods();
+
+    // 스크롤 복원은 우리가 한다. 브라우저에 맡기면 화면을 다 그리기 전에
+    // 옛 위치로 튀어서 엉뚱한 자리에 멈춘다.
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
+    nav = createNav({
+      history,
+      render: paint,
+      scrollY: () => window.scrollY,
+      label: labelOf,
+    });
+    window.addEventListener('popstate', e => nav.restore(e.state));
+
     mountShell();
-    showHome();
+    nav.start({ kind: 'home' });
     registerOffline();
   } catch (err) {
     screen.innerHTML = `

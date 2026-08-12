@@ -145,9 +145,25 @@ test('그룹 키가 아니라 사람이 부르는 이름을 보여준다', () =>
 });
 
 test('groupLabel 이 없으면 group 을 그대로 쓴다', () => {
-  const food = base({ group: '고구마', method: '찌기' });
+  const food = base({
+    group: '고구마', method: '찌기', verdict: { level: 'red', reason: 'gi' },
+  });
   const html = detailScreen(food, [food, base({ id: 'y', method: '생것' })]);
   assert.ok(html.includes('고구마'), html);
+});
+
+// 뒤로가기 버튼은 "돌아갈 곳"을 말해야 한다. 예전에는 그룹 이름을 붙였는데,
+// 실제로 돌아가는 곳은 그룹이 아니라 직전 화면(검색 결과·카테고리·다른 상세)이라
+// 이름과 동작이 어긋났다. 이제 앱이 방문 기록에서 꺼내 넘겨준다.
+test('뒤로가기 버튼에 앱이 넘겨준 이름이 붙는다', () => {
+  const html = detailScreen(base({ group: '고구마' }), null, '채소');
+  assert.match(html, /id="back"[^]*?채소/);
+  assert.ok(!/id="back"[^]*?고구마/.test(html), '그룹 이름은 돌아갈 곳이 아니다');
+});
+
+test('돌아갈 곳 이름이 없으면 그냥 뒤로라고 한다', () => {
+  const html = detailScreen(base(), null);
+  assert.match(html, /id="back"[^]*?뒤로/);
 });
 
 // ── 양념 고지 ────────────────────────────────────────────────

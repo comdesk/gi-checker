@@ -33,11 +33,25 @@ def test_캐싱_목록에_실제_파일이_다_있다():
 
 
 def test_앱이_쓰는_파일이_캐싱_목록에_다_있다():
-    """반대 방향. 빠뜨리면 그 파일만 오프라인에서 안 열린다."""
+    """반대 방향. 빠뜨리면 그 파일만 오프라인에서 안 열린다.
+
+    목록을 손으로 적어두면 파일을 새로 만들 때 같이 늘리는 것을 잊는다.
+    index.html 과 실제 import 문에서 뽑아내 대조한다."""
     sw = (WEB / "sw.js").read_text(encoding="utf-8")
-    needed = ["index.html", "styles.css", "app.js", "data.js", "render.js",
-              "search.js", "foods.json", "manifest.webmanifest"]
-    for name in needed:
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+
+    needed = {"index.html", "foods.json"}
+    needed |= set(re.findall(
+        r'(?:src|href)="(?:\./)?([\w.\-]+\.(?:js|css|webmanifest|png))"', html))
+    for js in WEB.glob("*.js"):
+        if js.name == "sw.js":          # 서비스워커는 자기 자신을 캐싱하지 않는다
+            continue
+        needed |= {
+            m for m in re.findall(r"""from\s+['"]\./([\w.\-]+)['"]""",
+                                  js.read_text(encoding="utf-8"))
+        }
+
+    for name in sorted(needed):
         assert f"'./{name}'" in sw, f"{name} 이 캐싱 목록에 없다"
 
 
