@@ -10,6 +10,7 @@ from statistics import quantiles
 
 from gi_match import apply_gi
 from group import METHOD_PREFIX, METHOD_TOKENS, apply_groups, sample_tag
+from icons import build as build_icons
 from normalize import apply_nutrient_fixes, drop_broken_carb, fill_missing, load_records
 from score import judge
 
@@ -23,6 +24,11 @@ PUNCT = re.compile(r"[\s,·()\[\]/\-_.]+")
 # 예시인 알탕_해물(940ml 한 그릇 1,466mg)은 여전히 걸린다 — build/bundle.py 리포트로
 # 확인했다(build/tests/test_bundle.py 의 test_나트륨_주의가_5퍼센트를_넘지_않는다 참고).
 SODIUM_CAUTION_MG = 1400
+
+# 이 번들의 판. foods.json 과 sw.js 가 같은 값을 쓴다 — 서비스워커는 자기 파일
+# 내용이 바뀌어야 새로 설치되므로, 데이터를 갱신했으면 여기를 올려야 사용자에게
+# 전달된다. stamp_service_worker() 가 sw.js 에 박아 넣는다.
+BUILD_VERSION = "2026-08-12"
 
 # 1인분으로 보기엔 너무 큰 포장. 이 이상이면서 밀키트 이름 표시가 있는 경우에만
 # perServing(1회 분량) 계산과 나트륨 주의를 건너뛴다.
@@ -478,7 +484,7 @@ def build(base: Path):
         groups[name].sort(key=lambda fid: order[fid])
 
     bundle = {
-        "version": "2026-08-11",
+        "version": BUILD_VERSION,
         "groups": {k: v for k, v in groups.items() if len(v) >= 2},
         "foods": foods,
     }
@@ -499,6 +505,28 @@ def build(base: Path):
     return bundle, stats
 
 
+SW_VERSION_LINE = re.compile(r"^const VERSION = '[^']*';$", re.M)
+
+
+def stamp_service_worker(sw_path: Path, version: str) -> bool:
+    """sw.js 의 VERSION 을 이 빌드 값으로 맞춘다.
+
+    브라우저는 서비스워커 파일의 **바이트가 달라져야** 새 버전을 설치한다.
+    데이터만 갱신하고 이 줄을 안 고치면 사용자는 영영 옛 foods.json 을 본다.
+    손으로 기억할 일이 아니라 빌드가 할 일이다.
+    """
+    if not sw_path.exists():
+        raise SystemExit(f"서비스워커가 없습니다: {sw_path}")
+    text = sw_path.read_text(encoding="utf-8")
+    new = SW_VERSION_LINE.sub(f"const VERSION = '{version}';", text, count=1)
+    if new == text:
+        if f"const VERSION = '{version}';" in text:
+            return False
+        raise SystemExit(f"{sw_path} 에서 VERSION 줄을 찾지 못했습니다")
+    sw_path.write_text(new, encoding="utf-8")
+    return True
+
+
 def main() -> int:
     base = Path(__file__).resolve().parent
     bundle, stats = build(base)
@@ -507,6 +535,9 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
     out.write_text(text, encoding="utf-8")
+
+    changed = stamp_service_worker(out.parent / "sw.js", BUILD_VERSION)
+    icons = build_icons(out.parent)
 
     raw_mb = len(text.encode("utf-8")) / 1_048_576
     gz_mb = len(gzip.compress(text.encode("utf-8"))) / 1_048_576
@@ -577,6 +608,9 @@ def main() -> int:
         for r in merge["skipped"][:20]:
             print(f"    {r['group']}/{r['method']} ({r['count']}건): "
                   f"탄수화물 {r['carb_min']:g}~{r['carb_max']:g}g (편차 {r['carb_spread']:g}g)")
+    print(f"[오프라인] sw.js VERSION={BUILD_VERSION} "
+          f"({'갱신함' if changed else '이미 같음'}), 아이콘 {len(icons)}개 — "
+          "첫 실행 뒤로는 네트워크 없이 열린다")
     print(f"\n파일 크기: {raw_mb:.1f}MB (gzip {gz_mb:.1f}MB) → {out}")
 
     if gz_mb > 3.0:

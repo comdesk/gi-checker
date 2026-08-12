@@ -1,0 +1,36 @@
+# web/ 폴더를 GitHub Pages 로 올린다.
+#
+# Pages 기본 설정은 저장소 루트나 /docs 만 서비스할 수 있어서, 그대로 쓰려면
+# web/ 을 docs/ 로 이름을 바꿔야 한다. 폴더 이름을 뜻과 다르게 짓느니
+# 이 워크플로로 web/ 을 그대로 올린다. 빌드 단계는 없다 — 정적 파일 그대로다.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:      # 저장소 Actions 탭에서 손으로도 돌릴 수 있게
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포가 겹치면 나중 것만 살린다.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

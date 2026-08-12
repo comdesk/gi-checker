@@ -180,12 +180,22 @@ function showDetail(id) {
     el.addEventListener('click', () => showDetail(el.dataset.id)));
 }
 
+// ── 오프라인 ──
+// 서비스워커 등록은 앱이 뜬 뒤에 한다. 등록이 실패해도(사파리 프라이빗 모드,
+// http 로 연 경우 등) 앱은 그냥 온라인 전용으로 동작하면 되므로 조용히 넘긴다.
+function registerOffline() {
+  if (!('serviceWorker' in navigator)) return;
+  // 상대 경로여야 한다 — GitHub Pages 는 /저장소이름/ 아래에 얹힌다.
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 // ── 시작 ──
 async function start() {
   try {
     bundle = await loadFoods();
     mountShell();
     showHome();
+    registerOffline();
   } catch (err) {
     screen.innerHTML = `
       <div class="empty">
