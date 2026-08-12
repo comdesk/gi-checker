@@ -10,7 +10,7 @@ from statistics import quantiles
 
 from gi_match import apply_gi
 from group import METHOD_PREFIX, METHOD_TOKENS, apply_groups, sample_tag
-from normalize import apply_nutrient_fixes, fill_missing, load_records
+from normalize import apply_nutrient_fixes, drop_broken_carb, fill_missing, load_records
 from score import judge
 
 CHOSUNG = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
@@ -352,6 +352,10 @@ def build(base: Path):
     records, filter_stats = load_records(
         base / "raw", base / "data" / "category_allow.csv")
     group_stats = apply_groups(records, base / "data" / "food_group.csv")
+    # 차감법으로 깨진 탄수화물을 먼저 걸러낸다 — 그룹·조리법이 정해진 뒤라야
+    # 형제와 비교할 수 있으므로 apply_groups 다음이다.
+    records, broken = drop_broken_carb(records, base / "data" / "drop.csv")
+
     # 손으로 채운 값이 먼저다 — 사람이 이미 답을 아는 것을 기계가 추정하면 안 된다.
     fixed_count = apply_nutrient_fixes(records, base / "data" / "nutrient_fix.csv")
     # 상속은 조리법을 보므로 apply_groups 다음이어야 한다 — 말린 것과 생것은
@@ -484,7 +488,7 @@ def build(base: Path):
         "sodium_caution": sodium_caution_count,
         "package": package_count, "sodium_none": sodium_none_count,
         "fill": fill_stats, "nutrient_fix": fixed_count,
-        "samename": samename_stats,
+        "samename": samename_stats, "broken_carb": broken,
         "merge": {
             "before_total": before_total, "after_total": len(foods),
             "merged_records": merged_records, "bundles": len(merge_reports),
@@ -538,6 +542,11 @@ def main() -> int:
           f"{stats['package']:,}건 — perServing·나트륨 주의 대상에서 제외")
     print(f"[나트륨 모름(None)] {stats['sodium_none']:,}건 "
           f"({stats['sodium_none'] / total * 100:.1f}%) — 원본 공란, 0으로 채우지 않음")
+
+    print(f"[차감법 탄수화물 오류 제외] {len(stats['broken_carb']):,}건 — "
+          "단백질 측정이 실패해 그 오차가 탄수화물로 넘어온 시료")
+    for name, reason in stats["broken_carb"]:
+        print(f"  {name}: {reason}")
 
     print("[빈 칸 메우기] 원본 공란을 0으로 찍지 않고 같은 대표식품명에서 비율로 물려받는다")
     for key in sorted(stats["fill"]):

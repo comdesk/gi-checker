@@ -26,6 +26,11 @@ COL = {
     "basis": "영양성분함량기준량",
     "kcal": "에너지(kcal)",
     "carb": "탄수화물(g)",
+    # 판정에는 안 쓴다. 탄수화물이 차감법으로 계산된 값이라(100 - 수분 - 단백질
+    # - 지방 - 회분) 단백질 측정이 실패하면 그 오차가 탄수화물로 넘어오는데,
+    # 그걸 잡아내는 데만 쓴다 (drop_broken_carb).
+    "protein": "단백질(g)",
+    "water": "수분(g)",
     "sugar": "당류(g)",
     "fiber": "식이섬유(g)",
     "fat": "지방(g)",
@@ -85,6 +90,9 @@ class FoodRecord:
     # 원본에 값이 없어 같은 대표식품명에서 물려받은 항목들 ('sugar','fiber','fat').
     # 화면에 '추정치' 라고 밝히기 위해 남긴다 — 측정값인 척하면 안 된다.
     inherited: tuple[str, ...] = ()
+    # 차감법으로 계산된 탄수화물이 믿을 만한지 검사하는 데만 쓴다. 화면에 안 나간다.
+    protein: float | None = None
+    water: float | None = None
 
 
 def _num(value) -> float | None:
@@ -318,6 +326,97 @@ def remove_source_duplicates(records: list) -> tuple[list, list]:
     return removed, kept
 
 
+# 단백질이 무너진 만큼 탄수화물이 늘어난 레코드를 골라내는 기준.
+#
+# 원본의 탄수화물은 측정값이 아니라 차감값이다.
+#     탄수화물 = 100 - 수분 - 단백질 - 지방 - 회분
+# 그래서 단백질 측정이 실패하면 그 오차가 통째로 탄수화물로 넘어온다. 실제 예:
+#     갈치 육 생것 5월   단백질  6.76g  탄수화물 12.11g   <- 빨강
+#     갈치 육 생것 나머지 단백질 17~20g  탄수화물  0~0.5g  <- 초록
+# 생선에 탄수화물 12g 은 없다. 5월 시료의 단백질 측정이 틀린 것이다.
+#
+# 열량으로는 못 잡는다 — 단백질과 탄수화물이 둘 다 4kcal/g 이라 서로 바뀌어도
+# 열량이 그대로다. 대신 **단백질+탄수화물 합계가 보존된다**는 것이 단서다.
+#
+# 형제(같은 그룹·조리법·양념)의 중앙값과 비교한다. 최댓값/최솟값 기준도
+# 시도했으나 고구마빵·와플·파스타처럼 진짜로 탄수화물이 많은 음식까지
+# 걸려서(141건) 쓸 수 없었다. 중앙값 기준은 9건만 잡고 전부 실제 오류였다.
+#
+# **수분으로는 같은 검사를 할 수 없다.** 어느 성분이 틀리든 오차가 탄수화물로
+# 가는 것은 맞지만, 수분과 탄수화물은 원래 반비례한다 — 마르면 탄수화물이
+# 진짜로 농축된다. 수분 기준을 넣어 보니 누룽지(수분 5.9%)·발아현미·
+# 빨간고추까지 43건이 걸렸고 대부분 정상이었다. 단백질은 탄수화물과 그런
+# 관계가 아니라서 신호가 된다.
+BROKEN_PROTEIN_DROP = 5.0    # 단백질이 형제 중앙값보다 이만큼 낮고
+BROKEN_CARB_RISE = 5.0       # 탄수화물이 이만큼 높으면서
+BROKEN_SUM_TOLERANCE = 5.0   # 둘의 합은 형제와 이 안에 들면 = 측정 실패
+BROKEN_MIN_SIBLINGS = 3      # 형제가 이보다 적으면 중앙값을 믿을 수 없다
+
+
+def drop_broken_carb(records, manual_path: Path | None = None):
+    """차감법 탄수화물이 깨진 레코드를 걸러낸다.
+
+    같은 음식의 성한 시료가 남아 있을 때만 버린다 — 하나뿐인 음식을 지우면
+    검색이 안 되는 것이 오히려 손해다.
+
+    자동으로 못 잡는 것(형제 중 여러 건이 동시에 깨져 중앙값 자체가 오염된
+    경우 — 멸치가 그렇다)은 manual_path 의 목록으로 처리한다.
+    """
+    manual: dict[str, str] = {}
+    if manual_path and manual_path.exists():
+        with manual_path.open(encoding="utf-8-sig", newline="") as f:
+            for lineno, row in enumerate(csv.DictReader(f), start=2):
+                name = _clean(row.get("name"))
+                if not name:
+                    continue
+                if not _clean(row.get("reason")):
+                    raise SystemExit(f"drop.csv:{lineno} '{name}' 에 근거(reason)가 없습니다")
+                manual[name] = _clean(row.get("reason"))
+
+    # 조리식품(음식.csv)에는 적용하지 않는다. 같은 '닭튀김' 이라도 레시피에 따라
+    # 튀김옷과 소스가 달라 단백질이 낮고 탄수화물이 높은 것이 **정상**이다
+    # ('리얼 치킨 꿔바로우' 가 그렇게 걸렸다). 이 검사는 같은 재료를 반복해서
+    # 측정한 원재료성 데이터에서만 뜻이 있다.
+    buckets: dict[tuple, list] = defaultdict(list)
+    for r in records:
+        if r.protein is not None and not r.is_prepared:
+            buckets[(r.group or r.rep_name, r.method, r.seasoning)].append(r)
+
+    suspect: dict[str, str] = {}
+    for items in buckets.values():
+        if len(items) < BROKEN_MIN_SIBLINGS:
+            continue
+        mid_protein = median([r.protein for r in items])
+        mid_carb = median([r.nutrients.carb for r in items])
+        for r in items:
+            protein, carb = r.protein, r.nutrients.carb
+            if (protein <= mid_protein - BROKEN_PROTEIN_DROP
+                    and carb >= mid_carb + BROKEN_CARB_RISE
+                    and abs((protein + carb) - (mid_protein + mid_carb))
+                    <= BROKEN_SUM_TOLERANCE):
+                suspect[r.name] = (
+                    f"단백질 {protein}g (형제 중앙값 {mid_protein}g), "
+                    f"탄수화물 {carb}g (형제 {mid_carb}g) — 차감법 오차")
+
+    targets = {**suspect, **manual}
+    # 같은 음식의 성한 시료가 남는지 확인한다.
+    survivors: dict[tuple, int] = Counter(
+        (r.group or r.rep_name, r.method) for r in records if r.name not in targets)
+
+    dropped, kept = [], []
+    for r in records:
+        reason = targets.get(r.name)
+        if reason and survivors[(r.group or r.rep_name, r.method)] >= 1:
+            dropped.append((r.name, reason))
+        else:
+            kept.append(r)
+
+    unknown = sorted(set(manual) - {r.name for r in records})
+    if unknown:
+        raise SystemExit(f"drop.csv 에 없는 식품이 적혀 있습니다: {unknown}")
+    return kept, dropped
+
+
 def load_nutrient_fixes(path: Path) -> dict[str, dict[str, float]]:
     """손으로 채운 영양성분. 상속과 구간 판정보다 우선한다.
 
@@ -472,7 +571,8 @@ def load_records(raw_dir: Path, allow_path: Path):
                     continue
 
                 values = {k: _num(row[COL[k]])
-                          for k in ("kcal", "carb", "sugar", "fiber", "fat", "sodium")}
+                          for k in ("kcal", "carb", "sugar", "fiber", "fat",
+                                    "sodium", "protein", "water")}
                 # 탄수화물·열량 둘 중 하나라도 없으면 판정 자체가 불가능하니 제외한다.
                 # 나머지(당류·식이섬유·지방·나트륨)는 없으면 None 으로 둔다.
                 # 0 으로 채우면 안 된다 — 그것은 '없다' 가 아니라 '모른다' 이고,
@@ -519,6 +619,8 @@ def load_records(raw_dir: Path, allow_path: Path):
                         **{k: None if values[k] is None else round(values[k], 1)
                            for k in ("sugar", "fiber", "fat", "sodium")},
                     ),
+                    protein=values["protein"],
+                    water=values["water"],
                     is_prepared=(filename == "음식.csv"),
                 )
 
