@@ -201,6 +201,10 @@ _SAMPLE_PLACE = {
     "삼천포", "제주", "진주", "인천", "경기", "창원", "거제", "신안", "군산", "해남",
     "충무", "양양", "영덕", "진해", "문경", "대구", "금산", "광양", "대전", "거문도",
     "자란도", "율촌", "춘천", "영암", "기장", "울릉도", "보령", "가평(청평)",
+    # 처음 목록을 만들 때 상위 40개만 보고 지나쳐 34건이 남아 있었다.
+    # 이번엔 '평균|N월' 앞에 오는 조각을 전수로 훑어 빠짐없이 채웠다.
+    "경주", "속초", "동해EEZ", "원양산", "장흥", "동해", "남해중부", "목포",
+    "영광", "사천", "구산면", "대청댐", "서해남부EEZ",
 }
 _SAMPLE_PLACE_RE = re.compile(r"^수입\(.+\)$")
 
@@ -229,6 +233,40 @@ def sample_tag(name: str) -> str:
     return rest.replace("_", " ").strip()
 
 
+# 영문 품종명·상품 코드를 이름에서 뺀다.
+#   피 IEC525(NO.5) 도정 생것          -> 피 도정 생것            (연구 계통 번호)
+#   파프리카 Raon yellow(미니파프리카) ... -> 파프리카 미니파프리카 ...  (상품 품종명)
+#   아이스티 NEW복숭아아이스티            -> 아이스티 복숭아아이스티
+#   소보로빵 PB정통소보루               -> 소보로빵 정통소보루
+#
+# 단, 괄호 안에 한글이 있으면 그건 설명이라 살린다 — '(중량1g)' 의 'g' 까지
+# 지우면 '(중량1)' 이 되어 뜻이 망가진다. 그래서 괄호 밖만 손댄다.
+_PAREN = re.compile(r"\(([^()]*)\)")
+_LATIN_RUN = re.compile(r"[A-Za-z][A-Za-z0-9.\-]*(\s+[A-Za-z][A-Za-z0-9.\-]*)*")
+_HANGUL = re.compile(r"[가-힣]")
+
+
+def _strip_latin(segment: str) -> str:
+    """조각에서 영문 표기를 뺀다. 남는 것이 없으면 빈 문자열(호출부가 버린다)."""
+    kept_parens = []
+
+    def take(m):
+        inner = m.group(1)
+        if _HANGUL.search(inner):        # '(미니파프리카)', '(중량1g)' 은 설명이다
+            kept_parens.append(inner)
+        return "\x00"                    # 자리만 남겨둔다
+
+    outside = _PAREN.sub(take, segment)
+    outside = _LATIN_RUN.sub("", outside)
+    # 괄호 자리를 되돌린다. 괄호 밖에 아무것도 안 남았으면 괄호를 벗긴다.
+    rest = outside.replace("\x00", "").strip(" -·,")
+    if not rest:
+        return " ".join(kept_parens).strip()
+    for inner in kept_parens:
+        rest = f"{rest}({inner})"
+    return rest.strip(" -·,")
+
+
 def _drop_redundant_class(parts: list[str]) -> list[str]:
     """'오징어류_오징어_...' 의 앞머리를 뗀다.
 
@@ -255,6 +293,8 @@ def _readable(name: str) -> str:
     # 쉼표 묶음을 먼저 푼다. '수컷,다리' 는 두 낱말이고, '양식,육' 의 '육' 은
     # 아래 기본 부위 제거에 걸려야 한다 — 붙어 있으면 둘 다 안 된다.
     parts = [w for seg in segments for w in seg.split(",") if w.strip()]
+    # 영문 품종명·상품 코드를 빼고, 빼고 나서 남는 게 없으면 그 조각을 버린다.
+    parts = [s for s in (_strip_latin(w) for w in parts) if s] or parts
     # '육'·'전체' 는 기본 부위라 이름에 넣으면 어색하다 ('멸치 전체 쪄서 말린것').
     # 그룹은 이미 갈라져 있으므로 이름에서 빼도 헷갈리지 않는다.
     if len(parts) >= 3:

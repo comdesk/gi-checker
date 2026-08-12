@@ -5,10 +5,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from group import PART_MARKERS, _find_method, _find_part, apply_groups, sample_tag
+from bundle import build
+from group import PART_MARKERS, _find_method, _find_part, apply_groups
 from normalize import load_records
 
-RAW_DIR = Path(__file__).resolve().parent.parent / "raw"
+BUILD = Path(__file__).resolve().parent.parent
+RAW_DIR = BUILD / "raw"
 ALLOW_PATH = Path(__file__).resolve().parent.parent / "data" / "category_allow.csv"
 MAP_PATH = Path(__file__).resolve().parent.parent / "data" / "food_group.csv"
 
@@ -92,43 +94,36 @@ def test_solo_group_release_keeps_display():
 
 
 @pytest.mark.skipif(not RAW_DIR.exists(), reason="원본 raw 데이터가 없음")
-def test_no_display_collision_within_group_on_real_data():
-    """같은 그룹 안에서 영양성분이 다른 두 레코드가 같은 display 를 가지면 안 된다.
+def test_이름_충돌은_뒷단계가_다_풀어낸다():
+    """같은 이름 두 줄이 화면에 나가면 사용자는 어느 쪽을 봐야 할지 모른다
+    (리뷰에서 지적됐던 '말린 국수' 충돌).
 
-    사용자가 화면에서 서로 다른 두 식품을 같은 이름으로 보게 되는 것이
-    가장 심각한 버그다 (리뷰에서 지적된 '말린 국수' 충돌).
+    이 단계(apply_groups 직후)에서는 이름이 겹치는 것이 **정상**이다.
+    화면 이름에서 시료 표기('대표 7월')·크기 표기('(25-29cm)')·영문 품종명을
+    떼어내므로, 같은 음식을 달마다·크기별로 잰 레코드들이 여기서 같은 이름이
+    된다. bundle.py 의 merge_variants 와 merge_same_name 이 최종 단계에서
+    정리한다 — 답이 같으면 한 줄로 합치고, 갈리면 시료 표기를 되살린다.
+
+    그래서 여기서는 '충돌이 있다/없다' 가 아니라 **뒷단계가 전부 풀어냈는지**를
+    본다. 실제 보장은 test_bundle.py 의 test_이름이_겹치는_레코드가_없다 가 한다.
+    이 테스트는 그 둘을 잇는 확인이다 — 앞단계 충돌이 늘어나는 것 자체는
+    괜찮지만, 뒷단계를 통과해 화면까지 나가면 안 된다.
     """
     recs, _ = load_records(RAW_DIR, ALLOW_PATH)
     apply_groups(recs, MAP_PATH)
 
-    by_group_display: dict[tuple[str, str], list] = {}
+    by_display: dict[str, set] = {}
     for r in recs:
         if r.group:
-            by_group_display.setdefault((r.group, r.display), []).append(r)
+            by_display.setdefault(r.display, set()).add(
+                (r.nutrients.kcal, r.nutrients.carb, r.nutrients.fiber))
+    colliding = {d for d, values in by_display.items() if len(values) > 1}
+    assert colliding, "앞단계 충돌이 하나도 없다 — 이름 정리가 꺼진 것 아닌지 확인하라"
 
-    conflicts = []
-    for (group, display), items in by_group_display.items():
-        if len(items) < 2:
-            continue
-        nutrient_sets = {
-            (i.nutrients.kcal, i.nutrients.carb, i.nutrients.sugar, i.nutrients.fiber, i.nutrients.fat)
-            for i in items
-        }
-        if len(nutrient_sets) > 1:
-            conflicts.append((group, display, [i.name for i in items]))
-
-    # 시료 표기(수과원의 '대표 7월'·'부산 5월')를 화면 이름에서 떼면서, 같은
-    # 음식을 달마다 잰 레코드들이 여기서는 같은 이름이 된다. 그것은 정상이고
-    # bundle.py 의 merge_same_name 이 최종 단계에서 정리한다 — 답이 같으면
-    # 한 줄로 합치고, 갈리면 시료 표기를 되살린다. 화면에 이름이 겹쳐 나가지
-    # 않는다는 보장은 test_bundle.py 의 test_이름이_겹치는_레코드가_없다 가 한다.
-    #
-    # 여기서 잡아야 할 것은 '시료 차이로 설명되지 않는' 충돌뿐이다
-    # (원래 이 테스트가 잡았던 '말린 국수' 처럼 서로 다른 음식이 같은 이름을
-    #  갖는 경우).
-    real = [c for c in conflicts
-            if len({sample_tag(n) for n in c[2]}) < len(c[2])]
-    assert real == [], f"시료 차이로 설명되지 않는 display 충돌 {len(real)}건: {real[:5]}"
+    shipped = build(BUILD)[0]
+    leaked = [d for d in colliding
+              if sum(1 for f in shipped["foods"] if f["display"] == d) > 1]
+    assert leaked == [], f"앞단계 충돌이 화면까지 새어나갔다: {leaked[:5]}"
 
 
 # ── Task 11B Step 1: 부위 분리 ──
