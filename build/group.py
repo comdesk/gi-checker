@@ -245,9 +245,16 @@ def _drop_redundant_class(parts: list[str]) -> list[str]:
 
 
 def _readable(name: str) -> str:
-    """원본 표기를 사람이 읽을 수 있게. '_' 는 공백으로."""
-    parts = _drop_redundant_class(
+    """원본 표기를 사람이 읽을 수 있게. '_' 는 공백으로.
+
+    '수컷,다리'·'양식,육' 처럼 쉼표로 붙여 놓은 것은 공백으로 푼다 —
+    원본의 표기 습관일 뿐이고 사람은 그렇게 읽지 않는다.
+    """
+    segments = _drop_redundant_class(
         [p for p in strip_sample_tag(name).split("_") if p])
+    # 쉼표 묶음을 먼저 푼다. '수컷,다리' 는 두 낱말이고, '양식,육' 의 '육' 은
+    # 아래 기본 부위 제거에 걸려야 한다 — 붙어 있으면 둘 다 안 된다.
+    parts = [w for seg in segments for w in seg.split(",") if w.strip()]
     # '육'·'전체' 는 기본 부위라 이름에 넣으면 어색하다 ('멸치 전체 쪄서 말린것').
     # 그룹은 이미 갈라져 있으므로 이름에서 빼도 헷갈리지 않는다.
     if len(parts) >= 3:

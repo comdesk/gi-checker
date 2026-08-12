@@ -11,7 +11,8 @@ from statistics import quantiles
 from gi_match import apply_gi
 from group import METHOD_PREFIX, METHOD_TOKENS, apply_groups, sample_tag
 from icons import build as build_icons
-from normalize import apply_nutrient_fixes, drop_broken_carb, fill_missing, load_records
+from normalize import (
+    apply_nutrient_fixes, drop_broken_carb, drop_meal_kits, fill_missing, load_records)
 from score import judge
 
 CHOSUNG = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
@@ -177,6 +178,10 @@ def _too_spread_to_merge(carbs: list[float]) -> bool:
     return carb_max / carb_min >= CARB_RATIO_LIMIT
 
 
+# 부위를 이름에 되살릴 때 쓰는 말. 원본 표기('육')는 사람이 안 쓴다.
+PART_LABEL = {"육": "살", "전체": "통째"}
+
+
 def _add_alias(food: dict) -> None:
     """화면 이름을 바꿨으면 그 이름으로도 검색돼야 한다.
     (단위 테스트의 최소 dict 에는 search 가 없다 — 있을 때만 손댄다)"""
@@ -242,9 +247,14 @@ def merge_same_name(foods: list[dict], groups: dict[str, list[str]]):
     for display, items in still.items():
         if len(items) < 2:
             continue
+        # 겹치는 이유는 대개 부위를 이름에서 뺐기 때문이다
+        # ('굴 육 생것' 과 '굴 전체 생것' 이 둘 다 '굴 생것'). 그룹 이름을
+        # 통째로 붙이면 '[고둥류 전체]' 처럼 길고 낯설다 — 실제로 다른
+        # 부위 한 낱말만 되살린다.
         for f in items:
-            if f["group"] and f["group"] != display:
-                f["display"] = f"{display} [{f['group']}]"
+            tail = (f["group"] or "").split()[-1] if f["group"] else ""
+            if tail and tail not in display:
+                f["display"] = f"{display} {PART_LABEL.get(tail, tail)}"
                 _add_alias(f)
                 restored += 1
 
@@ -361,6 +371,8 @@ def build(base: Path):
     # 차감법으로 깨진 탄수화물을 먼저 걸러낸다 — 그룹·조리법이 정해진 뒤라야
     # 형제와 비교할 수 있으므로 apply_groups 다음이다.
     records, broken = drop_broken_carb(records, base / "data" / "drop.csv")
+    # 밀키트 상품명은 잡음이다 — 단 그 음식의 기본 자료가 따로 있을 때만 뺀다.
+    records, kits = drop_meal_kits(records)
 
     # 손으로 채운 값이 먼저다 — 사람이 이미 답을 아는 것을 기계가 추정하면 안 된다.
     fixed_count = apply_nutrient_fixes(records, base / "data" / "nutrient_fix.csv")
@@ -494,7 +506,7 @@ def build(base: Path):
         "sodium_caution": sodium_caution_count,
         "package": package_count, "sodium_none": sodium_none_count,
         "fill": fill_stats, "nutrient_fix": fixed_count,
-        "samename": samename_stats, "broken_carb": broken,
+        "samename": samename_stats, "broken_carb": broken, "kits": kits,
         "merge": {
             "before_total": before_total, "after_total": len(foods),
             "merged_records": merged_records, "bundles": len(merge_reports),
@@ -578,6 +590,8 @@ def main() -> int:
           "단백질 측정이 실패해 그 오차가 탄수화물로 넘어온 시료")
     for name, reason in stats["broken_carb"]:
         print(f"  {name}: {reason}")
+
+    print(f"[밀키트 제외] {len(stats['kits']):,}건 — 기본 자료가 따로 있는 상품만 뺐다")
 
     print("[빈 칸 메우기] 원본 공란을 0으로 찍지 않고 같은 대표식품명에서 비율로 물려받는다")
     for key in sorted(stats["fill"]):

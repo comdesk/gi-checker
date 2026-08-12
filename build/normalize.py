@@ -417,6 +417,29 @@ def drop_broken_carb(records, manual_path: Path | None = None):
     return kept, dropped
 
 
+KIT_MARKER = "간편조리세트"
+
+
+def drop_meal_kits(records):
+    """밀키트 상품을 뺀다 — 단, 그 음식의 기본 자료가 따로 있을 때만.
+
+    '칼국수_간편조리세트_세숫대야 바지락칼국수' 는 특정 회사 상품명이다.
+    부모님이 "칼국수 먹어도 되나" 를 찾는데 상품명이 줄줄이 나오면 잡음이다.
+    프랜차이즈 메뉴는 이미 걸러내고 있었는데 이쪽만 남아 있었다.
+
+    그래도 기본 자료가 없으면 남긴다. '감바스' 는 밀키트 자료뿐이라, 빼면
+    감바스가 아예 검색되지 않는다 — 잡음보다 없는 것이 나쁘다.
+    """
+    plain = {r.rep_name for r in records if KIT_MARKER not in r.name}
+    dropped, kept = [], []
+    for r in records:
+        if KIT_MARKER in r.name and r.rep_name in plain:
+            dropped.append(r.name)
+        else:
+            kept.append(r)
+    return kept, dropped
+
+
 def load_nutrient_fixes(path: Path) -> dict[str, dict[str, float]]:
     """손으로 채운 영양성분. 상속과 구간 판정보다 우선한다.
 
