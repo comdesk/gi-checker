@@ -159,3 +159,43 @@ test('한 낱말 질의는 낱말 검색으로 넓어지지 않는다', () => {
   const r = searchFoods('오징어', [squid]);
   assert.equal(r[0].kind, 'prefix');   // 이름이 '오징어류…' 로 시작한다
 });
+
+// 낱말 등급 순서. search.js 의 RANK 와 같아야 한다.
+const RANK_ORDER = ['exact', 'group', 'prefix', 'substring', 'words', 'split',
+                    'chosung', 'fuzzy'];
+
+test('띄어쓰기 없이 붙여 쳐도 찾는다', () => {
+  // 한국어는 띄어쓰기를 잘 안 한다. '조미오징어' 라고 이어붙인 이름은
+  // 데이터에 없지만 '조미'+'오징어' 로 끊으면 찾을 수 있다.
+  const r = searchFoods('조미오징어', [squid]);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].kind, 'split');
+});
+
+test('띄어 친 쪽이 붙여 친 쪽보다 앞선다', () => {
+  assert.ok(RANK_ORDER.indexOf('words') < RANK_ORDER.indexOf('split'));
+});
+
+test('한 글자 조각으로는 쪼개지 않는다', () => {
+  // '조'+'미오징어' 를 허용하면 '조' 가 거의 모든 음식에 걸린다
+  const noise = {
+    id: 'n', name: '조기구이', group: null,
+    search: { norm: '조기구이', chosung: 'ㅈㄱㄱㅇ', alias: [] },
+  };
+  const r = searchFoods('조미오징어', [squid, noise]);
+  assert.deepEqual(r.map(x => x.food.id), ['오징어-조미구이']);
+});
+
+test('그룹의 짧은 이름으로도 그 음식 자체가 먼저 나온다', () => {
+  // 그룹 키는 '호박 단호박' 이지만 사람이 치는 말은 '단호박' 이다.
+  const foods = [
+    { id: '단호박찜', name: '단호박찜', group: null,
+      search: { norm: '단호박찜', chosung: 'ㄷㅎㅂㅉ', alias: [] } },
+    { id: '호박-단호박-찐것', name: '호박_단호박_찐것',
+      group: '호박 단호박', groupLabel: '단호박',
+      search: { norm: '호박단호박찐것', chosung: 'ㅎㅂㄷㅎㅂㅉㄱ', alias: ['찐단호박'] } },
+  ];
+  const r = searchFoods('단호박', foods);
+  assert.equal(r[0].food.id, '호박-단호박-찐것');
+  assert.equal(r[0].kind, 'group');
+});
