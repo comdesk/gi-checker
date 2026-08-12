@@ -29,6 +29,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          # Settings 에서 손으로 켜지 않아도 이 단계가 Pages 를 켜 준다.
+          # 안 켜져 있으면 "Get Pages site failed ... Not Found" 로 죽는다.
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
