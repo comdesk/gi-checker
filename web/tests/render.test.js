@@ -57,6 +57,15 @@ test('variants 가 2개 이상이면 영양성분 안에 품종 목록이 보인
   assert.ok(html.includes('품종 3종 · 대지, 수미, 자색'), html);
 });
 
+test('펼치기 화살표는 글자가 아니라 아이콘이다', () => {
+  // '⌄' 글자는 글꼴마다 세로 위치가 달라 글씨와 어긋나 보였다.
+  // 펼침 여부에 따른 회전은 CSS(details[open] .chev)가 한다.
+  const html = nutrientTable(base());
+  assert.ok(html.includes('class="chev"'), html);
+  assert.ok(!html.includes('⌄'), '글자 화살표가 남아 있다');
+  assert.ok(html.includes('aria-hidden="true"'), '읽어주기에서 빠져야 한다');
+});
+
 test('variants 가 없으면 품종 줄이 안 나온다', () => {
   const html = nutrientTable(base());
   assert.ok(!html.includes('품종'), html);

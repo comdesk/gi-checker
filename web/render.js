@@ -355,8 +355,11 @@ export function nutrientTable(food) {
   }
   if (origin.length) body += `<p class="nut-src">${origin.join(' · ')}</p>`;
 
+  // 화살표는 글자가 아니라 아이콘이다. '⌄' 글자는 글꼴마다 세로 위치가 달라
+  // 글씨와 어긋나 보였다. 펼치면 CSS 가 180도 돌린다.
   return `<details class="more">
-    <summary>영양성분 자세히 보기 ⌄</summary>
+    <summary>영양성분 자세히 보기<svg class="chev" viewBox="0 0 24 24"
+      aria-hidden="true"><path d="M6 9.5 12 15.5 18 9.5"/></svg></summary>
     <div class="nut">${body}</div>
   </details>`;
 }
