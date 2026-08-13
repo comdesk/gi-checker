@@ -253,11 +253,13 @@ export function portionBlock(food) {
   if (level === 'red' || level === 'unknown') return '';
 
   const eyeball = ex.eyeball ? ` <span class="portion-e">${esc(ex.eyeball)}</span>` : '';
-  const daily = ex.daily ? `${esc(ex.daily)} · ` : '';
+  // 식품군마다 하고 싶은 말이 다르다. 과일·우유는 하루 횟수, 채소는
+  // '충분히 드셔도 좋습니다' — 채소에 분량만 띄우면 없는 제한이 생긴다.
+  const advice = ex.advice ? `${esc(ex.advice)} · ` : '';
   return `<div class="portion">
     <p class="portion-h">한 번에 이만큼</p>
     <p class="portion-v"><b>${ex.grams}${esc(ex.unit ?? 'g')}</b>${eyeball}</p>
-    <p class="portion-sub">${daily}대한당뇨병학회 식품교환표 기준</p>
+    <p class="portion-sub">${advice}대한당뇨병학회 식품교환표 기준</p>
   </div>`;
 }
 

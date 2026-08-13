@@ -14,7 +14,7 @@ BUILD = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BUILD))
 
 from exchange import (   # noqa: E402
-    CARB_BAND, DAILY, apply_exchange, load_exchange, unused_keys)
+    ADVICE, CARB_BAND, apply_exchange, dead_keys, load_exchange, unused_keys)
 from gi_match import apply_gi   # noqa: E402
 from group import apply_groups  # noqa: E402
 from normalize import load_records  # noqa: E402
@@ -62,16 +62,41 @@ def test_모든_줄에_식품군이_있다(table):
         assert entry["foodGroup"] in CARB_BAND, f"{key} 의 식품군 {entry['foodGroup']!r}"
 
 
-def test_하루_횟수는_과일군과_우유군에만_붙는다(table):
+def test_한_줄_조언은_곡류군만_없다(table):
+    """곡류군은 열량별 식단안마다 5~11 단위로 달라 하루 횟수를 말할 수 없고,
+    채소처럼 '충분히 드시라'고 할 수 있는 군도 아니다."""
     for key, entry in table.items():
-        has_daily = "daily" in entry
-        assert has_daily == (entry["foodGroup"] in DAILY), key
+        has_advice = "advice" in entry
+        assert has_advice == (entry["foodGroup"] != "곡류군"), key
 
 
-def test_안_쓰이는_키가_없다(records):
-    """오타를 잡는다. 키가 데이터와 안 맞으면 조용히 아무 데도 안 붙는다 —
-    표를 고칠 때 이 테스트가 없으면 고쳐놓고 안 붙은 줄 모른다."""
+CARB_ADVICE = "탄수화물이 있는 편이라 과하지 않게"
+SODIUM_ADVICE = "나트륨이 많은 편이라 양은 조절하세요"
+
+
+def test_채소_조언은_세_가지로_갈린다(table):
+    """4판이 세 가지를 갈라 말한다 — 대부분은 충분히, 탄수화물 5g 이상은
+    과잉섭취 주의, 나트륨 100mg 이상은 나트륨 제한 시 고려."""
+    veg = {k: v for k, v in table.items() if v["foodGroup"] == "채소군"}
+    assert {v["advice"] for v in veg.values()} == {
+        ADVICE["채소군"], CARB_ADVICE, SODIUM_ADVICE}
+
+    for key in ("연근", "우엉", "더덕 뿌리", "도라지 뿌리", "호박 단호박", "마늘종"):
+        assert veg[key]["advice"] == CARB_ADVICE, key
+    for key in ("상추", "오이", "배추", "시금치"):
+        assert veg[key]["advice"] == ADVICE["채소군"], key
+    # 김치·장아찌·미역에 '충분히 드셔도 좋습니다' 를 붙이면 안 된다.
+    # 당뇨와 고혈압은 같이 오는 일이 많고, 그때는 정반대 말이 된다.
+    for key in ("배추김치", "깍두기", "동치미", "단무지", "미역류 전체"):
+        assert veg[key]["advice"] == SODIUM_ADVICE, key
+
+
+def test_한_건도_못_붙은_키가_없다(records):
+    """두 가지를 다 본다 — 이름이 안 맞아 매칭조차 안 되는 키와, 매칭은
+    되는데 안전장치가 전부 걸러낸 키. 뒤엣것은 조용히 사라져서, 처음에
+    '무순' 이 부위 안전장치에 걸린 것을 한동안 못 찾았다."""
     assert unused_keys(records, EXCHANGE) == []
+    assert dead_keys(records, EXCHANGE) == {"이름이 안 맞음": [], "전부 걸러짐": []}
 
 
 # ── 실제로 붙은 값 ──
@@ -92,7 +117,11 @@ def test_안_쓰이는_키가_없다(records):
     ("멥쌀밥_백미", 70),             # 3판 Table 4: 밥 70g (1/3공기)
     ("식빵", 35),                  # 3판 Table 4: 빵류 35g (1쪽)
     ("우유", 200),                 # 3판 Table 8: 우유 200mL
-    ("마늘_구근_생것", 7),            # 3판 Table 6: 마늘 7g
+    ("마늘_구근_생것", 15),           # 4판: 마늘 15g (3판 7g)
+    ("상추_완전결구상추(양상추)_청상추_생것", 70),   # 4판: 채소류 70g
+    ("배추김치", 50),                # 4판: 김치류 50g
+    ("동치미", 70),                  # 4판: 나박김치·동치미만 70g
+    ("단무지", 20),                  # 4판에서 새로 들어온 피클·장아찌류 20g
 ])
 def test_알려진_분량이_맞다(records, name, grams):
     assert find(records, name).exchange["grams"] == grams
@@ -143,6 +172,7 @@ EYEBALL_GROUPS = {
     (150, "중 1쪽"): ["수박 생것"],
     (100, "대 1/2개"): ["오렌지 생것"],
     (40, "1/10개"): ["호박 단호박"],
+    (2, "1장"): ["김류 전체 말리기"],
     (200, "1컵"): ["우유", "두유"],
 }
 EYEBALL = {key: (grams, eyeball)
@@ -184,12 +214,21 @@ def test_말린_것과_생것의_분량이_다르다(records):
 
 
 def test_과일에는_하루_횟수가_붙는다(records):
-    assert find(records, "사과_생것").exchange["daily"] == "하루 1~2번"
+    assert find(records, "사과_생것").exchange["advice"] == "하루 1~2번"
 
 
 def test_곡류에는_하루_횟수를_말하지_않는다(records):
     """열량별 식단안마다 5~11 단위로 크게 달라 하나로 말할 수 없다."""
-    assert "daily" not in find(records, "멥쌀밥_백미").exchange
+    assert "advice" not in find(records, "멥쌀밥_백미").exchange
+
+
+def test_채소는_충분히_드시라는_말이_같이_나간다(records):
+    """분량만 띄우면 있지도 않은 제한이 생긴다. 4판 고려사항이
+    '대부분의 채소류는 충분히 섭취하도록' 이라고 한다."""
+    lettuce = find(records, "상추_완전결구상추(양상추)_청상추_생것").exchange
+    assert lettuce["advice"] == "채소는 충분히 드셔도 좋습니다"
+    # 반면 지침이 따로 짚은 고당질 채소는 반대로 말한다
+    assert find(records, "연근_생것").exchange["advice"] == "탄수화물이 있는 편이라 과하지 않게"
 
 
 # ── 안전장치 ──
@@ -263,9 +302,13 @@ def test_교환단위는_판정을_바꾸지_않는다():
     assert before == after
 
 
-def test_교환단위는_영양성분을_건드리지_않는다(records):
+def test_실린_교환단위의_모양이_일정하다(records):
+    """화면이 읽는 필드다. 없는 키를 읽으면 조용히 undefined 가 되어
+    '한 번에 undefined g' 같은 것이 나간다."""
+    allowed = {"grams", "foodGroup", "eyeball", "advice", "unit"}
     for r in records:
-        if r.exchange:
-            assert r.nutrients.carb is not None
-            # exchange 는 별도 필드다. serving_grams(원본 1회 분량)와 다른 값이다.
-            assert r.exchange["grams"] != r.serving_grams or r.serving_grams is None
+        if not r.exchange:
+            continue
+        assert set(r.exchange) <= allowed, (r.name, set(r.exchange) - allowed)
+        assert isinstance(r.exchange["grams"], float)
+        assert r.exchange["foodGroup"] in CARB_BAND

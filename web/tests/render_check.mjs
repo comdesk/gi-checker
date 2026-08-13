@@ -5,8 +5,9 @@ import { detailScreen } from '../render.js';
 
 const bundle = JSON.parse(readFileSync(new URL('../foods.json', import.meta.url), 'utf8'));
 
-const want = ['생 사과', '생 수박', '생 단감', '생 연시', '말린 곶감',
-              '멥쌀밥 백미', '생 마늘', '생 앵두', '우유'];
+const want = ['생 사과', '생 수박', '생 백도복숭아', '생 천도복숭아', '말린 곶감',
+              '생 상추', '생 오이', '생 연근', '생 마늘', '배추김치', '단무지',
+              '생 표고버섯', '삶은 국수', '식빵', '말린 국수', '우유'];
 const text = t => t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 for (const name of want) {

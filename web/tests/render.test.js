@@ -73,7 +73,7 @@ test('목록 화면(listItem)에는 품종 줄이 나오지 않는다 — 목록
 // 초록인 의미가 없다. 다만 '드시지 마세요' 아래에 분량을 적으면 먹어도
 // 된다는 말로 읽히므로 빨강·알 수 없음에는 내보내지 않는다.
 
-const APPLE = { grams: 80, eyeball: '중 1/3개', foodGroup: '과일군', daily: '하루 1~2번' };
+const APPLE = { grams: 80, eyeball: '중 1/3개', foodGroup: '과일군', advice: '하루 1~2번' };
 
 test('1회 분량이 있으면 한 번에 이만큼 상자가 나온다', () => {
   const html = detailScreen(base({ exchange: APPLE }), null);
@@ -103,12 +103,22 @@ test('판단할 수 없으면 1회 분량을 말하지 않는다', () => {
   assert.ok(!html.includes('한 번에 이만큼'), html);
 });
 
-test('목측량과 하루 횟수는 없어도 상자가 나온다', () => {
+test('목측량과 한 줄 조언은 없어도 상자가 나온다', () => {
   const food = base({ exchange: { grams: 150, foodGroup: '과일군' } });
   const html = detailScreen(food, null);
   assert.ok(html.includes('한 번에 이만큼'), html);
   assert.ok(html.includes('150g'), html);
   assert.ok(!html.includes('하루'), html);
+});
+
+test('채소는 분량과 함께 충분히 드시라는 말을 같이 한다', () => {
+  // 채소에 분량만 덩그러니 띄우면 있지도 않은 제한을 만든다.
+  const food = base({
+    exchange: { grams: 70, foodGroup: '채소군', advice: '채소는 충분히 드셔도 좋습니다' },
+  });
+  const html = detailScreen(food, null);
+  assert.ok(html.includes('70g'), html);
+  assert.ok(html.includes('충분히 드셔도 좋습니다'), html);
 });
 
 test('단위가 있으면 그것을 쓴다 — 우유는 g 이 아니라 mL 다', () => {

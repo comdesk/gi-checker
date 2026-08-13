@@ -17,17 +17,28 @@
 import csv
 from pathlib import Path
 
-# 열량별 식단안에서 하루 몇 교환단위인지. 대한당뇨병학회 홈페이지의
-# 열량별 교환단위수 배분표(1,500 / 1,800 / 2,100 kcal, 식단안 3종)에서
-# 세 안이 모두 같은 범위를 주는 군만 적는다.
-#   과일군 1,500->1  1,800->1~2  2,100->2   (세 안 일치)
-#   우유군 합계      1~2                    (세 안 일치)
-# 곡류군은 5~11, 채소군은 7~9 로 안마다 크게 달라 하루 횟수를 말하지 않는다 —
-# 범위가 그만큼 넓으면 알려주는 것이 아니라 헷갈리게 하는 것이다.
-DAILY = {
+# 분량 밑에 붙는 한 줄. 식품군마다 하고 싶은 말이 다르다.
+#
+# 과일군·우유군은 하루 횟수를 말한다. 학회의 열량별 교환단위수 배분표
+# (1,500 / 1,800 / 2,100 kcal, 식단안 3종)에서 세 안이 모두 같은 범위를
+# 주기 때문이다 — 과일군 1~2, 우유군 합계 1~2.
+# 곡류군은 5~11 로 안마다 크게 달라 하루 횟수를 말하지 않는다. 범위가
+# 그만큼 넓으면 알려주는 것이 아니라 헷갈리게 하는 것이다.
+#
+# 채소군은 횟수 대신 지침의 말을 그대로 옮긴다. 4판 고려사항이
+# "대부분의 채소류는 에너지가 비교적 적고 식이섬유가 많으므로 충분히
+# 섭취하도록 식사를 계획한다" 고 한다. 분량만 덩그러니 띄우면 없는 제한을
+# 만드는 셈이라, 마음껏 드셔도 된다는 말을 같이 해야 한다.
+ADVICE = {
     "과일군": "하루 1~2번",
     "우유군": "하루 1~2번",
+    "채소군": "채소는 충분히 드셔도 좋습니다",
 }
+
+# 4판이 따로 짚은 것 — "1교환단위당 탄수화물 5g 이상인 채소는 탄수화물의
+# 제한이 필요한 경우 과잉섭취는 주의하여야 한다". 해당 줄은 csv 의 advice
+# 칸으로 이 문구를 덮어쓴다.
+ADVICE_HIGH_CARB_VEGETABLE = "탄수화물이 있는 편이라 과하지 않게"
 
 
 def load_exchange(path: Path) -> dict[str, dict]:
@@ -61,8 +72,10 @@ def load_exchange(path: Path) -> dict[str, dict]:
         eyeball = (row.get("eyeball") or "").strip()
         if eyeball:
             entry["eyeball"] = eyeball
-        if food_group in DAILY:
-            entry["daily"] = DAILY[food_group]
+        # 줄마다 적은 것이 식품군 기본값을 이긴다.
+        advice = (row.get("advice") or "").strip() or ADVICE.get(food_group)
+        if advice:
+            entry["advice"] = advice
         table[key] = entry
     return table
 
@@ -119,7 +132,11 @@ CARB_BAND = {
     "과일군": (12.0, 0.4, 2.0),
     "곡류군": (23.0, 0.4, 2.0),
     "우유군": (10.0, 0.4, 2.0),
-    "채소군": (3.0, 0.4, 3.0),
+    # 채소군만 위아래로 넓다. 지침이 정한 분량이 당질 3g 을 잘 안 지키기
+    # 때문이다 — 김 2g 은 당질 0.7g(0.24배), 달래 70g 은 9.4g(3.13배)이다.
+    # 채소는 '충분히 드시라'는 군이라 적게 잡히는 쪽은 해가 없다. 위쪽만
+    # 지키면 된다. 아래쪽 0.1 은 명백한 오배정을 잡는 최소한이다.
+    "채소군": (3.0, 0.1, 3.5),
 }
 
 
@@ -203,15 +220,54 @@ def apply_exchange(records, path: Path) -> dict[str, int]:
 
 
 def unused_keys(records, path: Path) -> list[str]:
-    """어느 레코드에도 안 붙은 키. 오타를 잡기 위한 것이다."""
+    """한 건도 못 붙은 키. 두 가지가 섞여 있고 원인이 다르므로 갈라서 돌려준다.
+
+      '이름이 안 맞음'  키가 어느 레코드와도 매칭되지 않는다 — 대개 오타다
+      '전부 걸러짐'     매칭은 되는데 안전장치가 다 걸러냈다 — 값이나 키가
+                       그 음식에 안 맞는다는 뜻이다 (예: '무순' 이 부위
+                       안전장치에 걸려 한 건도 못 붙었다)
+
+    처음엔 앞의 것만 봤는데, 뒤의 것은 조용히 사라져서 못 찾았다.
+    """
     table = load_exchange(path)
-    used = set()
+    apply_exchange(records, path)
+
+    def first_hit(r):
+        for key in keys_for(r):
+            if key in table:
+                return key
+        return None
+
+    matched, attached = set(), set()
+    for r in records:
+        key = first_hit(r)
+        if key is None:
+            continue
+        matched.add(key)
+        if r.exchange:
+            attached.add(key)
+
+    return sorted((set(table) - matched) | (matched - attached))
+
+
+def dead_keys(records, path: Path) -> dict[str, list[str]]:
+    """unused_keys 를 원인별로 나눈 것. 리포트에서 쓴다."""
+    table = load_exchange(path)
+    apply_exchange(records, path)
+
+    matched, attached = set(), set()
     for r in records:
         for key in keys_for(r):
             if key in table:
-                used.add(key)
+                matched.add(key)
+                if r.exchange:
+                    attached.add(key)
                 break
-    return sorted(set(table) - used)
+
+    return {
+        "이름이 안 맞음": sorted(set(table) - matched),
+        "전부 걸러짐": sorted(matched - attached),
+    }
 
 
 if __name__ == "__main__":
@@ -233,11 +289,11 @@ if __name__ == "__main__":
     for line in stats["뺀 목록"]:
         print(f"    {line}")
 
-    missing = unused_keys(recs, path)
-    if missing:
-        print("\n[어디에도 안 붙은 키 — 오타이거나 그 음식이 데이터에 없다]")
-        for k in missing:
-            print(f"  {k}")
+    for reason, keys in dead_keys(recs, path).items():
+        if keys:
+            print(f"\n[한 건도 못 붙은 키 — {reason}]")
+            for k in keys:
+                print(f"  {k}")
 
     print("\n[붙은 예시]")
     shown = 0
