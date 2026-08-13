@@ -71,12 +71,16 @@ def test_모든_줄에_식품군이_있다(table):
         assert entry["foodGroup"] in CARB_BAND, f"{key} 의 식품군 {entry['foodGroup']!r}"
 
 
-def test_한_줄_조언은_곡류군만_없다(table):
-    """곡류군은 열량별 식단안마다 5~11 단위로 달라 하루 횟수를 말할 수 없고,
-    채소처럼 '충분히 드시라'고 할 수 있는 군도 아니다."""
+NO_ADVICE = {"곡류군", "어육류군"}
+
+
+def test_한_줄_조언이_없는_군은_둘뿐이다(table):
+    """곡류군은 열량별 식단안마다 5~11 단위로 달라 하루 횟수를 말할 수 없다.
+    어육류군은 지침의 '고지방보다 저지방·중지방' 을 그룹 단위로는 말할 수
+    없다 — 삼겹살과 안심이 같은 '돼지고기' 그룹에 있다."""
     for key, entry in table.items():
         has_advice = "advice" in entry
-        assert has_advice == (entry["foodGroup"] != "곡류군"), key
+        assert has_advice == (entry["foodGroup"] not in NO_ADVICE), key
 
 
 CARB_ADVICE = "탄수화물이 있는 편이라 과하지 않게"
@@ -183,6 +187,9 @@ EYEBALL_GROUPS = {
     (40, "1/10개"): ["호박 단호박"],
     (2, "1장"): ["김류 전체 말리기"],
     (200, "1컵"): ["우유", "두유", "산양유"],
+    (55, "6개"): ["메추리알"],
+    (8, "1큰술"): ["땅콩", "아몬드", "잣", "호두", "피스타치오넛", "해바라기씨",
+                  "호박씨", "참깨", "들깨", "브라질너트", "피칸", "코코넛"],
 }
 EYEBALL = {key: (grams, eyeball)
            for (grams, eyeball), keys in EYEBALL_GROUPS.items()
@@ -296,16 +303,44 @@ def test_안전장치3_말린_것에_생것_분량이_안_붙는다(records):
 
 
 def test_붙은_값은_모두_교환단위_정의를_지킨다(records):
-    """표시된 분량 x 탄수화물이 그 식품군의 1교환단위 근처여야 한다.
-    이것이 어긋나면 키를 잘못 붙였다는 뜻이다 — 표가 스스로를 검산한다."""
+    """표시된 분량 x 기준 영양소가 그 식품군의 1교환단위 근처여야 한다.
+    이것이 어긋나면 키를 잘못 붙였다는 뜻이다 — 표가 스스로를 검산한다.
+
+    검산 축은 군마다 다르다. 어육류군은 탄수화물이 0에 가까워 탄수화물로는
+    아무것도 못 거르므로 단백질을 본다."""
     for r in records:
         if not r.exchange:
             continue
-        target, low, high = CARB_BAND[r.exchange["foodGroup"]]
-        ratio = (r.nutrients.carb * r.exchange["grams"] / 100.0) / target
+        which, target, low, high = CARB_BAND[r.exchange["foodGroup"]]
+        value = r.protein if which == "protein" else getattr(r.nutrients, which)
+        if value is None:
+            continue   # 검산할 값이 없으면 애초에 거를 수 없다
+        ratio = (value * r.exchange["grams"] / 100.0) / target
         assert low <= ratio <= high, (
-            f"{r.name}: {r.exchange['grams']:g}g x 탄{r.nutrients.carb:g}g "
+            f"{r.name}: {r.exchange['grams']:g}g x {which} {value:g}g "
             f"= 기준의 {ratio:.1f}배")
+
+
+def test_군마다_검산_축이_맞다():
+    """어육류군을 탄수화물로 검산하면 0에 가까워 아무것도 못 거른다."""
+    assert CARB_BAND["어육류군"][0] == "protein"
+    assert CARB_BAND["지방군"][0] == "fat"
+    for fg in ("과일군", "곡류군", "채소군", "우유군"):
+        assert CARB_BAND[fg][0] == "carb"
+
+
+def test_검산할_값이_없는_레코드가_얼마나_되는지_지켜본다(records):
+    """검산 축이 None 이면 안전장치 2가 그 레코드를 그냥 통과시킨다.
+    지금 얼마나 되는지 못 박아두어, 늘어나면 알아채게 한다."""
+    blind = 0
+    for r in records:
+        if not r.exchange:
+            continue
+        which = CARB_BAND[r.exchange["foodGroup"]][0]
+        value = r.protein if which == "protein" else getattr(r.nutrients, which)
+        if value is None:
+            blind += 1
+    assert blind <= 40, f"검산 없이 통과한 레코드가 {blind}건이다"
 
 
 # ── 판정에 영향을 주지 않는다 ──

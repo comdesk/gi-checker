@@ -5,8 +5,9 @@ import { detailScreen } from '../render.js';
 
 const bundle = JSON.parse(readFileSync(new URL('../foods.json', import.meta.url), 'utf8'));
 
-const want = ['생 사과', '생 수박', '생 백도복숭아', '생 상추', '생 연근',
-              '배추김치', '생 표고버섯', '삶은 국수', '우유'];
+const want = ['생 사과', '생 상추', '배추김치', '삶은 국수',
+              '생 삼겹살', '삼겹살', '생 소고기', '구운 고등어', '생 달걀',
+              '말린 아몬드', '볶은 땅콩', '생 굴', '말린 북어'];
 
 // 식이섬유 표가 실제로 무엇에 붙었는지 한눈에 본다 — 이 표의 쓸모는
 // '같은 값이면 이쪽' 이라 비교가 되어야 의미가 있다.

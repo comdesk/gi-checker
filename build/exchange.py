@@ -33,7 +33,16 @@ ADVICE = {
     "과일군": "하루 1~2번",
     "우유군": "하루 1~2번",
     "채소군": "채소는 충분히 드셔도 좋습니다",
+    # 4판 고려사항: "지방군에 속한 모든 식품은 소량의 섭취로도 높은 에너지를
+    # 내므로, 적정 체중을 유지하기 위해서는 과량 섭취하지 않도록 한다."
+    # 견과류는 몸에 좋다고 알려져 한 줌씩 드시기 쉬운데 1교환단위가 8g 이다.
+    "지방군": "적은 양으로도 열량이 높습니다",
 }
+
+# 어육류군은 한 줄 조언을 두지 않는다. 지침이 하려는 말은 "고지방보다
+# 저지방·중지방을 고르라" 인데, 우리 데이터는 삼겹살과 안심이 같은 '돼지고기'
+# 그룹에 있어 그룹 단위로는 그 구분을 말할 수 없다. 지방 함량은 아래
+# 영양성분표에 이미 나온다.
 
 # 4판이 따로 짚은 것 — "1교환단위당 탄수화물 5g 이상인 채소는 탄수화물의
 # 제한이 필요한 경우 과잉섭취는 주의하여야 한다". 해당 줄은 csv 의 advice
@@ -177,25 +186,46 @@ def _part_mismatch(name: str, key: str) -> str | None:
 # 식품군 -> (1교환단위 탄수화물 g, 허용 하한 배수, 허용 상한 배수)
 # 채소군만 상한이 넓다. 논문이 이 9종을 고른 기준 자체가 '1교환단위에 당질
 # 6g 이상' 이라 기준값 3g 과 원래 어긋나 있기 때문이다 — 연근 40g 이 6.9g 이다.
+# 식품군 -> (검산할 영양소, 1교환단위 함량, 허용 하한 배수, 허용 상한 배수)
+#
+# 군마다 검산 축이 다르다. 교환단위를 정한 기준 영양소가 다르기 때문이다 —
+# 어육류군은 탄수화물이 거의 0이라 탄수화물로는 아무것도 못 거른다. 대신
+# 세 군(저·중·고지방) 모두 단백질 8g 으로 같아서 단백질이 좋은 축이 된다.
+# 지방군은 지방 5g 이 기준이다.
 CARB_BAND = {
-    "과일군": (12.0, 0.4, 2.0),
-    "곡류군": (23.0, 0.4, 2.0),
-    "우유군": (10.0, 0.4, 2.0),
+    "과일군": ("carb", 12.0, 0.4, 2.0),
+    "곡류군": ("carb", 23.0, 0.4, 2.0),
+    "우유군": ("carb", 10.0, 0.4, 2.0),
     # 채소군만 위아래로 넓다. 지침이 정한 분량이 당질 3g 을 잘 안 지키기
     # 때문이다 — 김 2g 은 당질 0.7g(0.24배), 달래 70g 은 9.4g(3.13배)이다.
     # 채소는 '충분히 드시라'는 군이라 적게 잡히는 쪽은 해가 없다. 위쪽만
     # 지키면 된다. 아래쪽 0.1 은 명백한 오배정을 잡는 최소한이다.
-    "채소군": (3.0, 0.1, 3.5),
+    "채소군": ("carb", 3.0, 0.1, 3.5),
+    "어육류군": ("protein", 8.0, 0.5, 2.0),
+    "지방군": ("fat", 5.0, 0.5, 2.0),
 }
 
 
-def _carb_off(carb: float, grams: float, food_group: str) -> float | None:
-    """교환단위 기준 탄수화물 대비 몇 배인가. 허용 범위 안이면 None."""
+def _nutrient_of(r, which: str) -> float | None:
+    """검산에 쓸 영양소 값. 단백질만 Nutrients 밖(FoodRecord)에 있다."""
+    if which == "protein":
+        return r.protein
+    return getattr(r.nutrients, which)
+
+
+def _carb_off(r, grams: float, food_group: str) -> float | None:
+    """교환단위 기준 영양소 대비 몇 배인가. 허용 범위 안이면 None.
+
+    (이름은 탄수화물로 시작했지만 지금은 군마다 다른 영양소를 본다)
+    """
     band = CARB_BAND.get(food_group)
-    if band is None or carb is None:
+    if band is None:
         return None
-    target, low, high = band
-    ratio = (carb * grams / 100.0) / target
+    which, target, low, high = band
+    value = _nutrient_of(r, which)
+    if value is None:
+        return None
+    ratio = (value * grams / 100.0) / target
     return None if low <= ratio <= high else ratio
 
 
@@ -210,7 +240,10 @@ CONCENTRATING = ("말리기", "가루")
 # 그대로 두면 4판이 30g 이라고 명시한 밀가루·전분가루·미숫가루·쌀가루가
 # 전부 막힌다. 곡류군은 안전장치 2(탄수화물 검산)로 충분하다 —
 # 말린 고구마(2.3배)·구운 옥수수(2.4배)는 그쪽에서 걸린다.
-CONCENTRATING_EXEMPT = ("곡류군",)
+# 지방군도 같은 이유로 뺀다. 견과·종실류는 말리거나 볶은 것이 기본 형태라
+# ('아몬드 말린것', '참깨 볶은것') 규칙을 그대로 두면 지방군이 통째로 막힌다.
+# 지방 검산(안전장치 2)이 대신 걸러준다.
+CONCENTRATING_EXEMPT = ("곡류군", "지방군")
 
 
 def _method_mismatch(method: str | None, key: str, food_group: str) -> str | None:
@@ -259,11 +292,13 @@ def apply_exchange(records, path: Path) -> dict[str, int]:
                 rejects.append(f"[{dried}] {r.name} ← 키 {key!r}")
                 break
 
-            ratio = _carb_off(r.nutrients.carb, hit["grams"], hit["foodGroup"])
+            ratio = _carb_off(r, hit["grams"], hit["foodGroup"])
             if ratio is not None:
+                which = CARB_BAND[hit["foodGroup"]][0]
+                value = _nutrient_of(r, which)
                 stats["교환단위와 어긋나 뺌"] += 1
                 rejects.append(
-                    f"[{ratio:.1f}배] {r.name} (탄{r.nutrients.carb:g}g) ← 키 {key!r}")
+                    f"[{ratio:.1f}배] {r.name} ({which} {value:g}g) ← 키 {key!r}")
                 break
 
             entry = dict(hit)
