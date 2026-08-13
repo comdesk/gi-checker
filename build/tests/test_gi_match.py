@@ -77,3 +77,31 @@ def test_추정_GI_에는_근거가_붙는다(records):
             assert r.gi_basis is None
         if r.gi_kind == "none":
             assert r.gi_value is None
+
+
+def test_종을_나눈_그룹에_따로_GI_를_붙일_수_있다():
+    """'감' 안에 단감(아삭)과 연시(물러야 먹는 것)가 함께 있다. 대표식품명
+    키('감')로 붙이면 단감 값이 연시에까지 간다. 종을 나눴으면 그 그룹
+    이름으로 각각 붙일 수 있어야 한다."""
+    import tempfile, csv
+    from pathlib import Path
+    from gi_match import apply_gi
+
+    class R:
+        def __init__(self, name, rep, group, method):
+            self.name, self.rep_name, self.group, self.method = name, rep, group, method
+            self.gi_value, self.gi_kind, self.gi_basis = None, "none", None
+            self.display = name
+
+    recs = [R("감_단감_생것", "감", "감 단감", "생것"),
+            R("감_연시_생것", "감", "감 연시", "생것")]
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "gi_map.csv"
+        with p.open("w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["key", "gi", "source", "note"])
+            w.writerow(["감 단감", 42.9, "s", "n"])
+            w.writerow(["감 연시", 61, "s", "n"])
+        apply_gi(recs, p)
+    assert [r.gi_value for r in recs] == [42.9, 61]
+    assert [r.gi_kind for r in recs] == ["measured", "measured"]

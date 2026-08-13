@@ -281,3 +281,15 @@ def test_종분리_마커와_화면이름을_따로_둘_수_있다():
         out = load_species_split(p)
     assert out["복숭아"]["천도"] == "천도복숭아"
     assert out["호박"]["애호박"] == "애호박"
+
+
+def test_품종이_더하기로_붙어_있어도_찾는다():
+    """원본은 '감_단감+부유_생것' 처럼 종 아래 품종을 '+' 로 붙여 적었다.
+    조각 전체가 '단감+부유' 라서 마커 '단감' 과 정확히 일치하지 않는다.
+    '+' 앞부분으로도 봐야 단감 네 품종이 다 걸린다."""
+    from group import _find_species
+    splits = {"감": {"단감": "단감", "연시": "연시"}}
+    assert _find_species("감_단감+부유_생것", "감", splits) == "단감"
+    assert _find_species("감_연시+청도반시_생것", "감", splits) == "연시"
+    assert _find_species("감_단감_생것", "감", splits) == "단감"
+    assert _find_species("감_대봉(갑주백목)_생것", "감", splits) is None

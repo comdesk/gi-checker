@@ -161,13 +161,20 @@ def load_species_split(path: Path) -> dict[str, dict[str, str]]:
 
 def _find_species(name: str, rep_name: str,
                   splits: dict[str, dict[str, str]]) -> str | None:
-    """이름에서 분리 마커를 찾아 돌려준다 (화면이름이 아니라 마커)."""
+    """이름에서 분리 마커를 찾아 돌려준다 (화면이름이 아니라 마커).
+
+    원본은 종 아래 품종을 '+' 로 붙여 적기도 한다 — '감_단감+부유_생것'.
+    조각 전체('단감+부유')로만 보면 마커 '단감' 에 안 걸려 네 품종이 새어나간다.
+    """
     markers = splits.get(rep_name)
     if not markers:
         return None
     for part in (p.strip() for p in name.split("_")):
         if part in markers:
             return part
+        base = part.split("+")[0].strip()
+        if base and base in markers:
+            return base
     return None
 
 

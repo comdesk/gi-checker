@@ -38,9 +38,19 @@ def apply_gi(records, gi_map_path: Path) -> dict[str, int]:
     table = load_gi_map(gi_map_path)
     stats = {"실측": 0, "추정": 0, "없음": 0}
 
-    # 1단계 — 정확 매칭
+    # 1단계 — 정확 매칭. 좁은 키부터 본다.
+    #
+    # 그룹 키를 대표식품명보다 먼저 보는 이유: 종을 나눈 경우('감 단감' /
+    # '감 연시') 대표식품명은 둘 다 '감' 이라 구분이 안 된다. 단감(아삭)과
+    # 연시(물러야 먹는 것)는 GI 가 42.9 대 61 로 다른데, 대표식품명 키만
+    # 보면 단감 값이 연시에까지 갔다.
+    # 종을 안 나눈 레코드는 group == rep_name 이라 결과가 달라지지 않는다.
     for r in records:
         keys = []
+        if r.group and r.method:
+            keys.append(f"{r.group} {r.method}")
+        if r.group:
+            keys.append(r.group)
         if r.rep_name and r.method:
             keys.append(f"{r.rep_name} {r.method}")
         if r.rep_name:
