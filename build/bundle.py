@@ -1,5 +1,6 @@
 """foods.json 출력. 판정과 검색 인덱스를 여기서 계산한다."""
 
+import csv
 import gzip
 import hashlib
 import json
@@ -212,6 +213,53 @@ def _inherit_search(rep: dict, gone: dict) -> None:
     add.discard("")
     if add:
         mine["alias"] = sorted(set(mine["alias"]) | add)
+
+
+def load_synonyms(path: Path) -> list[tuple[str, str]]:
+    """사람이 쓰는 말 -> 우리 데이터의 그룹/식품명. (term, key) 목록."""
+    if not path.exists():
+        return []
+    lines = [ln for ln in path.read_text(encoding="utf-8-sig").splitlines()
+             if ln.strip() and not ln.lstrip().startswith("#")]
+    out = []
+    for row in csv.DictReader(lines):
+        term, key = (row.get("term") or "").strip(), (row.get("key") or "").strip()
+        if term and key:
+            out.append((term, key))
+    return out
+
+
+def apply_synonyms(foods: list[dict], path: Path) -> dict[str, int]:
+    """검색 별칭에 사람이 쓰는 말을 넣는다.
+
+    합치기가 끝난 뒤에 부른다 — 그래야 사라진 레코드에 붙이는 헛일을 안 한다.
+    어느 레코드에도 안 걸리는 말이 있으면 멈춘다. 조용히 아무 데도 안 붙으면
+    표를 고쳐놓고 안 붙은 줄 모른다.
+    """
+    pairs = load_synonyms(path)
+    by_key: dict[str, list[dict]] = defaultdict(list)
+    for f in foods:
+        if f["group"]:
+            by_key[f["group"]].append(f)
+        by_key[f["name"]].append(f)
+
+    added, missing = 0, []
+    for term, key in pairs:
+        targets = by_key.get(key)
+        if not targets:
+            missing.append((term, key))
+            continue
+        norm = search_norm(term)
+        for f in targets:
+            search = f.get("search")
+            if search and norm and norm not in {search["norm"], *search["alias"]}:
+                search["alias"] = sorted(search["alias"] + [norm])
+                added += 1
+    if missing:
+        raise SystemExit(
+            "synonym.csv 의 key 가 어느 레코드에도 안 걸립니다: "
+            + ", ".join(f"{t}->{k}" for t, k in missing))
+    return {"말": len(pairs), "붙은 레코드": added}
 
 
 def _add_alias(food: dict) -> None:
@@ -545,6 +593,10 @@ def build(base: Path):
     foods, samename_stats = merge_same_name(foods, groups)
     merged_records = before_total - len(foods)
 
+    # 사람이 쓰는 말을 검색 별칭에 넣는다. 합치기가 끝난 뒤라야 살아남은
+    # 레코드에만 붙는다 — '목살' 은 우리 데이터에 '목심' 이라고만 있다.
+    synonym_stats = apply_synonyms(foods, base / "data" / "synonym.csv")
+
     # 신호등·GI 표시 상태 분포는 합치기 이후(실제로 화면에 보이는 레코드) 기준으로
     # 다시 센다. 합쳐서 사라진 레코드는 대표와 답이 완전히 같았으므로, 그 답의
     # 비중만 줄어드는 것이지 다른 답의 비중이 늘어나는 것은 아니다.
@@ -574,6 +626,7 @@ def build(base: Path):
         "package": package_count, "sodium_none": sodium_none_count,
         "fill": fill_stats, "nutrient_fix": fixed_count,
         "samename": samename_stats, "broken_carb": broken, "kits": kits,
+        "synonym": synonym_stats,
         "merge": {
             "before_total": before_total, "after_total": len(foods),
             "merged_records": merged_records, "bundles": len(merge_reports),
@@ -650,6 +703,10 @@ def main() -> int:
     markers = "/".join(PACKAGE_NAME_MARKERS)
     print(f"[포장 전체 제외(grams>={PACKAGE_GRAMS} 이고 이름에 '{markers}')] "
           f"{stats['package']:,}건 — perServing·나트륨 주의 대상에서 제외")
+    syn = stats["synonym"]
+    print(f"[사람이 쓰는 말] {syn['말']}개 → {syn['붙은 레코드']:,}건에 검색 별칭 추가 "
+          "(목살→목심 처럼 식약처 표기와 다른 말)")
+
     ex = stats["exchange"]
     ex_shown = sum(1 for f in bundle["foods"] if f.get("exchange"))
     print(f"[식품교환표 1회 분량] 화면에 나가는 {ex_shown:,}건 "

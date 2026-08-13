@@ -289,6 +289,42 @@ def test_화면_이름으로도_검색된다(bundle):
             assert dn in f["search"]["alias"], f"{f['display']} 로 검색 불가"
 
 
+def test_사람이_쓰는_말로도_검색된다(bundle):
+    """식약처 표기와 파는 이름이 다른 것이 있다. '목살' 은 우리 데이터에
+    '목심' 이라고만 있어서, 예전에는 게살죽·맛살전이 나왔다."""
+    from bundle import load_synonyms
+
+    path = Path(__file__).resolve().parent.parent / "data" / "synonym.csv"
+    pairs = load_synonyms(path)
+    assert pairs, "동의어 표가 비었다"
+
+    by_key = {}
+    for f in bundle["foods"]:
+        if f["group"]:
+            by_key.setdefault(f["group"], []).append(f)
+        by_key.setdefault(f["name"], []).append(f)
+
+    for term, key in pairs:
+        targets = by_key.get(key)
+        assert targets, f"{term!r} 의 대상 {key!r} 가 사라졌다"
+        norm = search_norm(term)
+        for f in targets:
+            assert norm in {f["search"]["norm"], *f["search"]["alias"]}, \
+                f"{term!r} 로 {f['display']} 를 못 찾는다"
+
+
+def test_동의어의_대상이_없으면_빌드가_멈춘다(tmp_path):
+    """조용히 아무 데도 안 붙는 것이 제일 나쁘다 — 표를 고쳐놓고 안 붙은 줄 모른다."""
+    from bundle import apply_synonyms
+
+    path = tmp_path / "synonym.csv"
+    path.write_text("term,key,note\n없는말,없는그룹,\n", encoding="utf-8")
+    foods = [{"name": "사과_생것", "group": "사과", "display": "생 사과",
+              "search": {"norm": "사과생것", "alias": [], "chosung": ""}}]
+    with pytest.raises(SystemExit):
+        apply_synonyms(foods, path)
+
+
 def test_손으로_쓴_주의문구는_남발되지_않는다(bundle):
     """caution.csv 로 손으로 붙인 것은 여전히 적어야 한다.
 
