@@ -130,6 +130,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 .portion-v{margin:5px 0 0;font-size:19px;line-height:1.35;color:var(--ink2)}
 .portion-v b{font-size:32px;font-weight:800;letter-spacing:-.03em;color:var(--ink)}
 .portion-e{margin-left:4px;font-weight:700}
+/* 식이섬유가 많다는 것은 '이 안에서는 이쪽이 낫다'는 권장이다. 초록을 쓰되
+   신호등의 초록(--green)보다 연하게 해서 판정으로 오해되지 않게 한다. */
+.portion-fiber{display:inline-block;margin:8px 0 0;padding:4px 10px;
+               border-radius:99px;background:var(--green-tint);
+               border:1px solid var(--green-soft);color:var(--green-ink);
+               font-size:14px;font-weight:700}
 .portion-sub{margin:7px 0 0;font-size:14px;line-height:1.5;color:var(--ink3)}
 details.more{margin:16px 22px 24px;border:1px solid var(--line);border-radius:14px;
              background:#fbfcfd;overflow:hidden}

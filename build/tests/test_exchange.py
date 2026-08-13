@@ -14,13 +14,15 @@ BUILD = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BUILD))
 
 from exchange import (   # noqa: E402
-    ADVICE, CARB_BAND, apply_exchange, dead_keys, load_exchange, unused_keys)
+    ADVICE, CARB_BAND, apply_exchange, dead_keys, load_exchange,
+    load_fiber_rich, unused_keys)
 from gi_match import apply_gi   # noqa: E402
 from group import apply_groups  # noqa: E402
-from normalize import load_records  # noqa: E402
+from normalize import apply_nutrient_fixes, fill_missing, load_records  # noqa: E402
 from score import judge  # noqa: E402
 
 EXCHANGE = BUILD / "data" / "exchange.csv"
+FIBER_RICH = BUILD / "data" / "fiber_rich.csv"
 
 
 @pytest.fixture(scope="module")
@@ -30,8 +32,15 @@ def table():
 
 @pytest.fixture(scope="module")
 def records():
+    """bundle.build() 와 같은 순서로 돌린다.
+
+    빈 칸 메우기를 빼먹으면 r.inherited 가 비어 있어서, 식이섬유 표를
+    추정치에 붙이지 않는다는 규칙이 테스트에서 아예 안 걸린다.
+    """
     recs, _ = load_records(BUILD / "raw", BUILD / "data" / "category_allow.csv")
     apply_groups(recs, BUILD / "data" / "food_group.csv")
+    apply_nutrient_fixes(recs, BUILD / "data" / "nutrient_fix.csv")
+    fill_missing(recs)
     apply_exchange(recs, EXCHANGE)
     return recs
 
@@ -317,10 +326,53 @@ def test_교환단위는_판정을_바꾸지_않는다():
     assert before == after
 
 
+def test_식이섬유_목록의_키가_전부_교환표에_있다():
+    """오타나 이름이 바뀐 키가 있으면 조용히 아무 데도 안 붙는다.
+    load_exchange 가 그때 죽도록 해뒀고, 여기서 그것을 확인한다."""
+    for key in load_fiber_rich(FIBER_RICH):
+        assert key in load_exchange(EXCHANGE), key
+
+
+def test_식이섬유_목록이_세_군에_걸쳐_있다():
+    """한 군만 옮기다 만 상태를 잡는다."""
+    table = load_exchange(EXCHANGE)
+    groups = {table[k]["foodGroup"] for k in load_fiber_rich(FIBER_RICH)}
+    assert groups == {"과일군", "곡류군", "채소군"}
+
+
+def test_통곡물이_흰것보다_식이섬유_표시를_받는다(records):
+    """지침이 곡류군에서 '식이섬유가 높은 통곡물을 우선하여 선택한다'고 한다.
+    이 표시의 쓸모가 바로 그 비교다."""
+    assert find(records, "보리_겉보리_도정_생것").exchange["fiberRich"] is True
+    assert "fiberRich" not in find(records, "멥쌀_백미_생것").exchange
+
+
+def test_식이섬유_표시는_화면의_영양성분과_어긋나지_않는다(records):
+    """표 바로 아래에 영양성분표가 나온다. 표에 '식이섬유 1.3g' 이라고
+    적혀 있는데 위에서 '많은 편입니다' 라고 하면 앱을 못 믿게 된다.
+    지침 목록에 있어도 그 레코드의 실측값이 못 미치면 붙이지 않는다."""
+    for r in records:
+        if not (r.exchange or {}).get("fiberRich"):
+            continue
+        assert r.nutrients.fiber is not None, r.name
+        assert "fiber" not in r.inherited, f"{r.name}: 추정치로 표를 붙였다"
+        per_unit = r.nutrients.fiber * r.exchange["grams"] / 100.0
+        assert per_unit >= 2.5, f"{r.name}: 1교환단위 식이섬유 {per_unit:.1f}g"
+
+
+def test_지침_목록에_있어도_실측이_못_미치면_보류한다(records):
+    """지침은 다른 데이터베이스를 쓰고 품종도 하나로 정해 싣는다(사과는 부사).
+    우리 품종별 값과 갈리는 것이 실제로 있다."""
+    # 참외는 지침의 식이섬유 목록에 있지만 우리 값으로는 1교환단위 1.1g 이다
+    chamoe = find(records, "참외_씨 제거_생것")
+    assert chamoe.exchange["grams"] == 100
+    assert "fiberRich" not in chamoe.exchange
+
+
 def test_실린_교환단위의_모양이_일정하다(records):
     """화면이 읽는 필드다. 없는 키를 읽으면 조용히 undefined 가 되어
     '한 번에 undefined g' 같은 것이 나간다."""
-    allowed = {"grams", "foodGroup", "eyeball", "advice", "unit"}
+    allowed = {"grams", "foodGroup", "eyeball", "advice", "unit", "fiberRich"}
     for r in records:
         if not r.exchange:
             continue

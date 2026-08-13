@@ -256,9 +256,14 @@ export function portionBlock(food) {
   // 식품군마다 하고 싶은 말이 다르다. 과일·우유는 하루 횟수, 채소는
   // '충분히 드셔도 좋습니다' — 채소에 분량만 띄우면 없는 제한이 생긴다.
   const advice = ex.advice ? `${esc(ex.advice)} · ` : '';
+  // 1교환단위에 식이섬유가 2.5g 이상인 식품. 지침이 '식이섬유가 높은 통곡물을
+  // 우선하여 선택한다' 고 하는 그 기준이라, 같은 값이면 이쪽이 낫다는 뜻이다.
+  const fiber = ex.fiberRich
+    ? '<p class="portion-fiber">식이섬유가 많은 편입니다</p>' : '';
   return `<div class="portion">
     <p class="portion-h">한 번에 이만큼</p>
     <p class="portion-v"><b>${ex.grams}${esc(ex.unit ?? 'g')}</b>${eyeball}</p>
+    ${fiber}
     <p class="portion-sub">${advice}대한당뇨병학회 식품교환표 기준</p>
   </div>`;
 }

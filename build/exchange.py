@@ -41,15 +41,54 @@ ADVICE = {
 ADVICE_HIGH_CARB_VEGETABLE = "탄수화물이 있는 편이라 과하지 않게"
 
 
-def load_exchange(path: Path) -> dict[str, dict]:
-    """csv 를 읽어 key -> {grams, eyeball, foodGroup, daily} 로 만든다.
-
-    '#' 로 시작하는 줄은 주석이다. csv 모듈은 주석을 모르므로 미리 걸러낸다.
-    """
+def _read_rows(path: Path) -> list[str]:
+    """'#' 로 시작하는 줄은 주석이다. csv 모듈은 주석을 모르므로 미리 걸러낸다."""
     if not path.exists():
+        return []
+    return [ln for ln in path.read_text(encoding="utf-8-sig").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+# 1교환단위당 식이섬유 2.5g 이상. 지침이 곡류군에서 "식이섬유 함량이 높은
+# 통곡물을 우선하여 선택한다" 고 하는 그 기준이다. 같은 값이면 이쪽이 낫다는
+# 뜻이라 화면에 표를 붙인다.
+#
+# 표를 붙이는 조건은 두 가지를 **모두** 만족할 때다.
+#   1) 지침의 목록에 있다 (data/fiber_rich.csv)
+#   2) 그 레코드의 실측 식이섬유로 계산해도 2.5g 이상이다
+#
+# 처음엔 1번만 봤는데, 화면에 나가는 103건 중 37건이 바로 아래 영양성분표와
+# 어긋났다 — '식이섬유가 많은 편입니다' 위에 표에는 '식이섬유 1.3g' 이 적히는
+# 식이다. 지침은 다른 데이터베이스(FANTASY)를 쓰고 품종도 하나로 정해 싣기
+# 때문에(예: 사과는 부사 기준) 우리 품종별 값과 갈린다.
+#
+# 어느 쪽이 맞는지 우리가 판단할 근거가 없다. 그래서 둘이 같은 말을 할 때만
+# 붙인다. 표가 덜 붙는 것은 손해가 작지만, 화면이 스스로와 모순되는 것은
+# 사용자가 앱을 못 믿게 만든다.
+#
+# 추정치로는 붙이지 않는다. 표는 '이쪽이 낫다'는 적극적인 권장이라
+# 물려받은 값에 기대면 안 된다.
+FIBER_THRESHOLD = 2.5
+
+
+def load_fiber_rich(path: Path) -> set[str]:
+    rows = _read_rows(path)
+    if not rows:
+        return set()
+    keys = {(row.get("key") or "").strip() for row in csv.DictReader(rows)}
+    keys.discard("")
+    return keys
+
+
+def load_exchange(path: Path) -> dict[str, dict]:
+    """csv 를 읽어 key -> {grams, foodGroup, eyeball?, advice?, unit?, fiberRich?} 로.
+
+    식이섬유 목록은 같은 폴더의 fiber_rich.csv 에서 키로 읽어와 합친다.
+    """
+    lines = _read_rows(path)
+    if not lines:
         return {}
-    lines = [ln for ln in path.read_text(encoding="utf-8-sig").splitlines()
-             if ln.strip() and not ln.lstrip().startswith("#")]
+    fiber_rich = load_fiber_rich(path.with_name("fiber_rich.csv"))
     table: dict[str, dict] = {}
     for row in csv.DictReader(lines):
         key = (row.get("key") or "").strip()
@@ -76,7 +115,17 @@ def load_exchange(path: Path) -> dict[str, dict]:
         advice = (row.get("advice") or "").strip() or ADVICE.get(food_group)
         if advice:
             entry["advice"] = advice
+        # 지침 목록에 있다는 표시. 실제로 표를 붙일지는 apply_exchange 가
+        # 그 레코드의 실측 식이섬유까지 보고 정한다.
+        if key in fiber_rich:
+            entry["_fiberListed"] = True
         table[key] = entry
+
+    unknown = fiber_rich - set(table)
+    if unknown:
+        raise SystemExit(
+            "fiber_rich.csv 에 exchange.csv 에 없는 키가 있습니다: "
+            + ", ".join(sorted(unknown)))
     return table
 
 
@@ -172,10 +221,22 @@ def _method_mismatch(method: str | None, key: str, food_group: str) -> str | Non
     return None
 
 
+def _fiber_confirmed(r, grams: float) -> bool:
+    """이 레코드의 실측 식이섬유로도 1교환단위에 2.5g 이상인가.
+
+    물려받은 값(추정)이면 False — 표는 적극적인 권장이라 추정에 기대면 안 된다.
+    """
+    fiber = r.nutrients.fiber
+    if fiber is None or "fiber" in r.inherited:
+        return False
+    return fiber * grams / 100.0 >= FIBER_THRESHOLD
+
+
 def apply_exchange(records, path: Path) -> dict[str, int]:
     table = load_exchange(path)
     stats = {"붙음": 0, "없음": 0, "부위 불일치로 뺌": 0,
-             "말린 것에 생것 분량이라 뺌": 0, "교환단위와 어긋나 뺌": 0}
+             "말린 것에 생것 분량이라 뺌": 0, "교환단위와 어긋나 뺌": 0,
+             "식이섬유 표시": 0, "식이섬유 표시 보류": 0}
     used: set[str] = set()
     rejects: list[str] = []
 
@@ -205,7 +266,14 @@ def apply_exchange(records, path: Path) -> dict[str, int]:
                     f"[{ratio:.1f}배] {r.name} (탄{r.nutrients.carb:g}g) ← 키 {key!r}")
                 break
 
-            r.exchange = dict(hit)
+            entry = dict(hit)
+            listed = entry.pop("_fiberListed", False)
+            if listed and _fiber_confirmed(r, entry["grams"]):
+                entry["fiberRich"] = True
+                stats["식이섬유 표시"] += 1
+            elif listed:
+                stats["식이섬유 표시 보류"] += 1
+            r.exchange = entry
             used.add(key)
             stats["붙음"] += 1
             break
@@ -294,6 +362,34 @@ if __name__ == "__main__":
             print(f"\n[한 건도 못 붙은 키 — {reason}]")
             for k in keys:
                 print(f"  {k}")
+
+    # 식이섬유 표시는 지침 목록을 따른다. 우리 식약처 값으로 계산하면 어디가
+    # 어긋나는지 여기서 확인할 수 있게 남겨둔다 — 숨기면 나중에 어느 쪽이
+    # 맞는지 다시 따져볼 근거가 사라진다.
+    from normalize import apply_nutrient_fixes, fill_missing
+    apply_nutrient_fixes(recs, base / "data" / "nutrient_fix.csv")
+    fill_missing(recs)
+    apply_exchange(recs, path)
+
+    gaps = []
+    for r in recs:
+        ex = r.exchange
+        if not ex or r.nutrients.fiber is None:
+            continue
+        per_unit = r.nutrients.fiber * ex["grams"] / 100.0
+        if ex.get("fiberRich") and per_unit < FIBER_THRESHOLD:
+            gaps.append((per_unit, r.name, "지침은 많다는데 우리 값은 적다"))
+    gaps.sort()
+    if gaps:
+        print(f"\n[지침과 우리 식이섬유 값이 어긋나는 것 {len(gaps)}건 "
+              f"— 표시는 지침을 따른다]")
+        seen = set()
+        for per_unit, name, why in gaps:
+            head = name.split("_")[0]
+            if head in seen:
+                continue
+            seen.add(head)
+            print(f"  {per_unit:4.1f}g  {name}  ({why})")
 
     print("\n[붙은 예시]")
     shown = 0

@@ -5,9 +5,16 @@ import { detailScreen } from '../render.js';
 
 const bundle = JSON.parse(readFileSync(new URL('../foods.json', import.meta.url), 'utf8'));
 
-const want = ['생 사과', '생 수박', '생 백도복숭아', '생 천도복숭아', '말린 곶감',
-              '생 상추', '생 오이', '생 연근', '생 마늘', '배추김치', '단무지',
-              '생 표고버섯', '삶은 국수', '식빵', '말린 국수', '우유'];
+const want = ['생 사과', '생 수박', '생 백도복숭아', '생 상추', '생 연근',
+              '배추김치', '생 표고버섯', '삶은 국수', '우유'];
+
+// 식이섬유 표가 실제로 무엇에 붙었는지 한눈에 본다 — 이 표의 쓸모는
+// '같은 값이면 이쪽' 이라 비교가 되어야 의미가 있다.
+const fiber = bundle.foods
+  .filter(f => f.exchange?.fiberRich && !['red', 'unknown'].includes(f.verdict.level))
+  .map(f => f.display);
+console.log(`[식이섬유 표가 붙은 것 ${fiber.length}건]`);
+console.log('  ' + fiber.join(', ') + '\n');
 const text = t => t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 for (const name of want) {

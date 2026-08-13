@@ -111,6 +111,27 @@ test('목측량과 한 줄 조언은 없어도 상자가 나온다', () => {
   assert.ok(!html.includes('하루'), html);
 });
 
+test('식이섬유가 많으면 그렇다고 알려준다', () => {
+  const food = base({ exchange: { ...APPLE, fiberRich: true } });
+  const html = detailScreen(food, null);
+  assert.ok(html.includes('식이섬유가 많은 편입니다'), html);
+});
+
+test('식이섬유 표시가 없으면 그 줄도 없다', () => {
+  const html = detailScreen(base({ exchange: APPLE }), null);
+  assert.ok(!html.includes('식이섬유가 많은'), html);
+});
+
+test('빨강이면 식이섬유가 많아도 상자째 안 나온다', () => {
+  // '드시지 마세요' 아래에 권장 문구가 붙으면 앞뒤가 맞지 않는다.
+  const food = base({
+    exchange: { ...APPLE, fiberRich: true },
+    verdict: { level: 'red', reason: 'gi' },
+  });
+  const html = detailScreen(food, null);
+  assert.ok(!html.includes('식이섬유가 많은'), html);
+});
+
 test('채소는 분량과 함께 충분히 드시라는 말을 같이 한다', () => {
   // 채소에 분량만 덩그러니 띄우면 있지도 않은 제한을 만든다.
   const food = base({
