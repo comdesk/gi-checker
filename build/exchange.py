@@ -68,12 +68,18 @@ def load_exchange(path: Path) -> dict[str, dict]:
 
 
 def keys_for(r) -> list[str]:
-    """이 레코드가 찾아볼 키를 좁은 것부터. gi_match.apply_gi 와 같은 순서다.
+    """이 레코드가 찾아볼 키를 좁은 것부터.
 
-    조리법이 붙은 키가 먼저라야 말린 것·착즙한 것이 자기 값을 갖는다 —
-    건포도 15g 과 생포도 80g 은 다섯 배 넘게 다르다.
+    식품명(name)을 맨 앞에 둔다. gi_match 는 맨 뒤에 두지만 여기서는 반대다 —
+    교환표에는 한 그룹 안의 한 항목만 값이 다른 경우가 자주 있기 때문이다.
+      누룽지는 '멥쌀밥' 그룹에 있지만 밥(70g)이 아니라 30g 이다
+      복숭아는 천도만 150g 이고 백도·황도는 100g 이다
+    식품명이 가장 구체적인 지목이므로 그것이 있으면 그것이 이긴다.
+
+    나머지는 조리법이 붙은 키가 먼저다. 그래야 말린 것·삶은 것이 자기 값을
+    갖는다 — 마른국수 30g 과 삶은국수 90g 은 세 배 다르다.
     """
-    keys = []
+    keys = [r.name]
     if r.group and r.method:
         keys.append(f"{r.group} {r.method}")
     if r.group:
@@ -82,7 +88,6 @@ def keys_for(r) -> list[str]:
         keys.append(f"{r.rep_name} {r.method}")
     if r.rep_name:
         keys.append(r.rep_name)
-    keys.append(r.name)
     return keys
 
 
@@ -134,8 +139,17 @@ def _carb_off(carb: float, grams: float, food_group: str) -> float | None:
 # 조리법이 키에 적혀 있으면(예: '포도 말리기') 일부러 붙인 것이므로 통과시킨다.
 CONCENTRATING = ("말리기", "가루")
 
+# 곡류군은 뺀다. 이 규칙의 전제(생것은 물이 많다)가 성립하지 않기 때문이다 —
+# 백미는 처음부터 마른 것이라 생것 78.7g, 가루 81.1g 로 거의 같다. 규칙을
+# 그대로 두면 4판이 30g 이라고 명시한 밀가루·전분가루·미숫가루·쌀가루가
+# 전부 막힌다. 곡류군은 안전장치 2(탄수화물 검산)로 충분하다 —
+# 말린 고구마(2.3배)·구운 옥수수(2.4배)는 그쪽에서 걸린다.
+CONCENTRATING_EXEMPT = ("곡류군",)
 
-def _method_mismatch(method: str | None, key: str) -> str | None:
+
+def _method_mismatch(method: str | None, key: str, food_group: str) -> str | None:
+    if food_group in CONCENTRATING_EXEMPT:
+        return None
     if method in CONCENTRATING and method not in key:
         return method
     return None
@@ -161,7 +175,7 @@ def apply_exchange(records, path: Path) -> dict[str, int]:
                 rejects.append(f"[부위 {part}] {r.name} ← 키 {key!r}")
                 break
 
-            dried = _method_mismatch(r.method, key)
+            dried = _method_mismatch(r.method, key, hit["foodGroup"])
             if dried:
                 stats["말린 것에 생것 분량이라 뺌"] += 1
                 rejects.append(f"[{dried}] {r.name} ← 키 {key!r}")
