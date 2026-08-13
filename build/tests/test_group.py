@@ -244,3 +244,20 @@ def test_난백과_난황은_다른_그룹이다(records):
     원본은 난백(탄수 0.1g)과 난황(5.8g)을 따로 재어 놓았다."""
     groups = {r.group for r in records if r.rep_name == "달걀" and r.group}
     assert "달걀 난백" in groups and "달걀 난황" in groups, sorted(groups)
+
+
+def test_분류명_앞머리를_이름에서_뗀다():
+    """'파이/만주' 는 음식 이름이 아니라 식약처가 쓰는 서랍 이름이다.
+    사과파이를 검색했는데 화면에 '파이/만주 사과파이' 라고 나오면
+    정작 찾은 이름이 뒤에 붙어 있다.
+
+    '~류' 를 떼는 것과 같은 이유다 (오징어류 오징어 -> 오징어).
+    """
+    from group import _readable
+    assert _readable("파이/만주_사과파이") == "사과파이"
+    assert _readable("비스킷/쿠키/크래커_꿀오란다") == "꿀오란다"
+    assert _readable("밀크티/버블티_초코 버블티") == "초코 버블티"
+    # 뒤에 아무것도 없으면 그것이 이름이다 — 떼면 이름이 사라진다
+    assert _readable("리소토/리조또") == "리소토/리조또"
+    # 괄호 안의 '/' 는 분류명이 아니라 다른 이름을 병기한 것이다
+    assert _readable("완자전_소고기(동그랑땡/육원전)") == "완자전 소고기(동그랑땡/육원전)"

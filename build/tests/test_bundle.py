@@ -549,3 +549,17 @@ def test_합쳐져_사라진_이름으로도_찾을_수_있다():
     findable = [s["norm"], *s["alias"]]
     assert any("삼겹살" in x for x in findable), findable
     assert any("뒷다리" in x for x in findable), findable
+
+
+def test_분류명_그룹은_합치지_않는다():
+    """합칠 때 대표 이름을 그룹 이름에서 가져온다. 그룹 이름이 '파이/만주'
+    같은 서랍 이름이면 다섯 줄이 한 줄로 줄어드는 대신 그 한 줄이
+    '파이/만주' 가 된다 — 사과파이도 만주도 화면에서 사라진다.
+
+    답이 같아도 서로 다른 음식이라는 뜻이므로 합치지 않는다."""
+    foods = [
+        _food("a", "파이/만주_사과파이", "파이/만주", None, None, "red", 40.0),
+        _food("b", "파이/만주_다크초콜릿롤", "파이/만주", None, None, "red", 45.0),
+    ]
+    merged, _, _ = merge_variants(foods, {"파이/만주": ["a", "b"]})
+    assert {f["id"] for f in merged} == {"a", "b"}

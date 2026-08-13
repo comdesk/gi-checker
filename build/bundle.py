@@ -308,9 +308,14 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]],
     # 상태인 것들은 조리법 칸이 없어서, 이 조건이 method 를 요구하는 동안
     # 품종 24종이 '쌀밥' 검색 결과를 그대로 도배했다. 어차피 아래에서 답이
     # 같은지·영양성분이 비슷한지를 다시 보므로 여기서 걸러낼 이유가 없다.
+    # 합칠 때 대표 이름을 그룹 이름에서 가져온다. 그래서 그룹 이름이 음식
+    # 이름이 아니면 합치는 순간 이름이 사라진다 — '파이/만주' 안의 사과파이·
+    # 만주·다크초콜릿롤 다섯이 한 줄 '파이/만주' 가 됐다. 빗금이 든 그룹 이름은
+    # 식약처가 쓰는 서랍 이름이라 대표로 쓸 수 없다. 답이 같아도 서로 다른
+    # 음식이라는 뜻이므로 각자 두는 것이 맞다.
     buckets: dict[tuple, list[dict]] = {}
     for f in foods:
-        if f["group"]:
+        if f["group"] and "/" not in f["group"]:
             buckets.setdefault(
                 (f["group"], f["method"], f.get("seasoning")), []).append(f)
 
