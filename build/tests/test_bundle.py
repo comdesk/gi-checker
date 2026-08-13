@@ -17,7 +17,8 @@ from group import PART_PATTERN
 
 LEVELS = {"green", "amber", "red", "unknown"}
 KINDS = {"measured", "estimated", "na", "none"}
-REASONS = {"low-carb", "gi", "gi+sweet", "nutrient", "nutrient+sweet", "insufficient"}
+REASONS = {"low-carb", "gi", "gi+sweet", "nutrient", "nutrient+sweet",
+           "insufficient", "serving"}
 CATEGORIES = {"채소", "과일", "밥·면·빵", "국·찌개", "고기·생선", "간식·음료", "기타"}
 
 
@@ -498,3 +499,53 @@ def test_1회분량_환산은_모르는_값을_지어내지_않는다(bundle):
         for key in ("sugar", "fiber", "fat", "sodium"):
             if f["nutrients"][key] is None:
                 assert ps[key] is None, f"{f['name']}: {key} 를 모르는데 환산값이 있다"
+
+
+def test_조리법이_없어도_품종은_묶는다():
+    """'쌀밥' 을 치면 멥쌀밥 품종이 24줄로 나왔다 — 농림나1호·밭벼·새추청벼·
+    수라벼·일품벼·추청벼… 자기 쌀 품종을 아는 사람은 없다.
+
+    원인은 merge_variants 가 조리법(method)이 있는 것만 보고 있었던 것이다.
+    이 레코드들은 이름 자체가 '멥쌀밥' 이라 조리법 칸이 비어 있다."""
+    foods = [
+        _food("a", "멥쌀밥_백미", "멥쌀밥", None, None, "red", 31.7),
+        _food("b", "멥쌀밥_추청벼_백미", "멥쌀밥", None, None, "red", 33.7),
+        _food("c", "멥쌀밥_일품벼_백미", "멥쌀밥", None, None, "red", 34.6),
+    ]
+    merged, reports, skipped = merge_variants(foods, {"멥쌀밥": ["a", "b", "c"]})
+    assert skipped == []
+    assert len(merged) == 1
+    assert merged[0]["display"] == "멥쌀밥"
+    assert merged[0]["variants"] == ["백미", "추청벼 백미", "일품벼 백미"]
+
+
+def test_조리법이_없어도_답이_다르면_안_묶는다():
+    """조리법 칸을 열어준다고 판정이 다른 것까지 합치면 안 된다."""
+    foods = [
+        _food("a", "멥쌀밥_백미", "멥쌀밥", None, None, "red", 31.7),
+        _food("b", "멥쌀밥_누룽지", "멥쌀밥", None, None, "amber", 86.8),
+    ]
+    merged, _, _ = merge_variants(foods, {"멥쌀밥": ["a", "b"]})
+    assert {f["id"] for f in merged} == {"a", "b"}
+
+
+def _searchable(id, name, group, method, gi_value, level, carb):
+    f = _food(id, name, group, method, gi_value, level, carb)
+    f["search"] = {"norm": search_norm(f["display"]), "alias": [], "chosung": ""}
+    return f
+
+
+def test_합쳐져_사라진_이름으로도_찾을_수_있다():
+    """'생 돼지고기' 안으로 삼겹살이 합쳐지면서 '삼겹살' 검색이 0건이 됐다.
+    답이 같아서 한 줄로 줄이는 것과, 그 이름을 아예 없애는 것은 다른 얘기다."""
+    foods = [
+        _searchable("a", "돼지고기_뒷다리", "돼지고기", "생것", None, "green", 0.2),
+        _searchable("b", "돼지고기_삼겹살", "돼지고기", "생것", None, "green", 0.1),
+    ]
+    merged, _, _ = merge_variants(foods, {"돼지고기": ["a", "b"]})
+    assert len(merged) == 1
+    # 대표 자신의 이름은 norm 에, 사라진 쪽 이름은 alias 에 남는다
+    s = merged[0]["search"]
+    findable = [s["norm"], *s["alias"]]
+    assert any("삼겹살" in x for x in findable), findable
+    assert any("뒷다리" in x for x in findable), findable

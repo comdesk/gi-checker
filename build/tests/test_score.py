@@ -231,3 +231,106 @@ def test_fiber_max가_없으면_탄수화물_전부를_식이섬유로_볼_수_�
     """근거가 없으면 최선의 경우를 넉넉히 잡는다 — 함부로 나쁘게 단정하지 않는다."""
     unknown_food = Nutrients(kcal=300, carb=70.0, sugar=None, fiber=None, fat=None)
     assert judge(unknown_food, gi=None).level == "unknown"
+
+
+# ── 규칙 4: 한 번에 먹는 양 ──────────────────────────────────
+# GI 는 '얼마나 빨리 오르나'지 '얼마나 오르나'가 아니다. 양까지 반영한 것이
+# 혈당부하(GL) = GI × 소화되는 탄수화물 ÷ 100 이다.
+#
+# 이 규칙이 없을 때 실제로 나온 답: 자장면 GI 46 → 초록. 한 그릇(600g)에
+# 탄수화물 175g 으로 쌀밥 세 공기인데 '드셔도 좋아요' 라고 했다.
+
+
+def test_한_그릇_양이_많으면_gi_가_낮아도_빨강():
+    """자장면. GI 46(낮음)이지만 한 그릇 600g 에 탄수화물 175g → GL 75."""
+    jajang = Nutrients(kcal=350, carb=29.1, sugar=2.9, fiber=1.8, fat=2.5)
+    assert judge(jajang, gi=46).level == "green"          # 분량을 모르면 지금과 같다
+    v = judge(jajang, gi=46, serving_grams=600)
+    assert v.level == "red"
+    assert v.reason == "serving"
+
+
+def test_아이스크림은_지방이_gi_를_눌러도_양에서_걸린다():
+    """GI 36 은 지방이 흡수를 늦춰서 낮은 것이다. 한 통 311g 에 당류 48g."""
+    ice = Nutrients(kcal=300, carb=51.7, sugar=15.6, fiber=1.5, fat=7.6)
+    v = judge(ice, gi=36, serving_grams=311)
+    assert v.level == "red"
+
+
+def test_양이_적어도_등급을_올리지는_않는다():
+    """내리기만 한다. 분량 자료가 틀렸을 때 거짓 초록이 나오면 안 된다."""
+    bread = Nutrients(kcal=280, carb=50.9, sugar=1.6, fiber=3.5, fat=4.0)
+    assert judge(bread, gi=73).level == "red"
+    assert judge(bread, gi=73, serving_grams=20).level == "red"
+
+
+def test_gl_경계값():
+    """GL 10 이하 낮음, 20 이상 높음 (국제 기준)."""
+    n = Nutrients(kcal=100, carb=20.0, sugar=1.0, fiber=0.0, fat=0.5)
+    # GI 50, 100g → GL 10 → 그대로 초록
+    assert judge(n, gi=50, serving_grams=100).level == "green"
+    # GI 50, 110g → GL 11 → 노랑
+    assert judge(n, gi=50, serving_grams=110).level == "amber"
+    # GI 50, 200g → GL 20 → 빨강
+    assert judge(n, gi=50, serving_grams=200).level == "red"
+
+
+def test_gi_가_없으면_한_번_먹는_탄수화물로_본다():
+    """떡국. GI 자료가 없고 100g 당 16.4g 이라 노랑이었지만
+    한 그릇 700g 이면 탄수화물 109g 이다."""
+    tteokguk = Nutrients(kcal=120, carb=16.4, sugar=0.1, fiber=0.8, fat=1.0)
+    assert judge(tteokguk, gi=None).level == "amber"
+    v = judge(tteokguk, gi=None, serving_grams=700)
+    assert v.level == "red"
+    assert v.reason == "serving"
+
+
+def test_한_번_먹는_탄수화물_경계값():
+    """15g = 탄수화물 1교환단위, 45g = 당뇨 식사요법의 한 끼 하한."""
+    n = Nutrients(kcal=100, carb=10.0, sugar=0.5, fiber=0.0, fat=0.2)
+    assert judge(n, gi=None, serving_grams=100).level == "green"   # 10g
+    assert judge(n, gi=None, serving_grams=160).level == "amber"   # 16g
+    assert judge(n, gi=None, serving_grams=460).level == "red"     # 46g
+
+
+def test_탄수화물이_거의_없으면_분량이_커도_초록():
+    """규칙 1이 먼저다. 설렁탕 한 그릇 500g 을 먹어도 탄수화물이 없다."""
+    seolleongtang = Nutrients(kcal=50, carb=0.4, sugar=0.0, fiber=0.0, fat=2.0)
+    assert judge(seolleongtang, gi=None, serving_grams=500).level == "green"
+
+
+def test_분량을_모르면_지금_규칙_그대로():
+    """원재료(생 고구마 100g 등)는 한 번에 얼마를 먹는지 모른다."""
+    n = Nutrients(kcal=130, carb=31.0, sugar=5.0, fiber=2.0, fat=0.2)
+    assert judge(n, gi=55) == judge(n, gi=55, serving_grams=None)
+
+
+def test_결측값이_있어도_분량_규칙이_적용된다():
+    """당류를 모르는 경우에도 구간의 양 끝 모두에 적용돼야 한다.
+    양 끝이 다 빨강이면 unknown 이 아니라 빨강이다."""
+    n = Nutrients(kcal=350, carb=29.1, sugar=None, fiber=1.8, fat=2.5)
+    v = judge(n, gi=46, serving_grams=600)
+    assert v.level == "red"
+
+
+def test_식이섬유_상한은_당류가_차지한_몫을_넘을_수_없다():
+    """당류도 식이섬유도 탄수화물의 일부다. 둘의 합이 탄수화물을 넘을 수 없다.
+
+    망고스무디(탄수화물 20.1g, 당류 16.6g, 식이섬유 모름)를 이 상한 없이 보면
+    '식이섬유가 15g 일 수도 있다'는 최선의 경우가 만들어져 초록이 되고,
+    최악의 경우와 갈려 '알 수 없음' 이 된다. 당류가 16.6g 인 이상 식이섬유는
+    아무리 많아도 3.5g 이다.
+    """
+    smoothie = Nutrients(kcal=100, carb=20.1, sugar=16.6, fiber=None, fat=0.9)
+    v = judge(smoothie, gi=34, serving_grams=591, fiber_max=18.0)
+    assert v.level == "red", v
+
+
+def test_저탄수라도_한_그릇이_크면_양을_본다():
+    """규칙 1은 100g 기준이라 그릇 크기를 못 본다. 국밥은 100g 당 5g 이지만
+    한 그릇 700g 이면 35g 이다 — '혈당에 거의 영향 없어요' 는 틀린 말이 된다."""
+    gukbap = Nutrients(kcal=60, carb=5.0, sugar=0.3, fiber=0.0, fat=1.5)
+    assert judge(gukbap, gi=None).level == "green"
+    v = judge(gukbap, gi=None, serving_grams=700)
+    assert v.level == "amber"
+    assert v.reason == "serving"

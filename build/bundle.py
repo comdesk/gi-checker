@@ -182,6 +182,22 @@ def _too_spread_to_merge(carbs: list[float]) -> bool:
 PART_LABEL = {"육": "살", "전체": "통째"}
 
 
+def _inherit_search(rep: dict, gone: dict) -> None:
+    """합쳐져 사라지는 레코드의 이름으로도 대표가 찾아지게 한다.
+
+    답이 같아서 한 줄로 줄이는 것과, 그 이름을 아예 없애는 것은 다른 얘기다.
+    이 처리가 없을 때 '삼겹살'·'사과파이'·'딸기마카롱' 검색이 전부 0건이었다 —
+    각각 '생 돼지고기'·'파이/만주'·'마카롱' 안으로 합쳐지면서 이름이 지워졌다.
+    """
+    mine, theirs = rep.get("search"), gone.get("search")
+    if not mine or not theirs:
+        return   # 단위 테스트의 최소 dict 에는 search 가 없다
+    add = {theirs["norm"], *theirs["alias"]} - {mine["norm"], *mine["alias"]}
+    add.discard("")
+    if add:
+        mine["alias"] = sorted(set(mine["alias"]) | add)
+
+
 def _add_alias(food: dict) -> None:
     """화면 이름을 바꿨으면 그 이름으로도 검색돼야 한다.
     (단위 테스트의 최소 dict 에는 search 가 없다 — 있을 때만 손댄다)"""
@@ -226,6 +242,7 @@ def merge_same_name(foods: list[dict], groups: dict[str, list[str]]):
             for f in items:
                 if f is not rep:
                     removed_ids.add(f["id"])
+                    _inherit_search(rep, f)
             merged += len(items) - 1
         else:
             # 답이 갈린다. 어느 쪽이 어느 시료인지 밝혀야 고를 수 있다.
@@ -287,9 +304,13 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]],
     """
     # 양념 여부까지 키에 넣는다. 안 그러면 '조미하여 말린것'(0.4g)이 답이 같다는
     # 이유로 '말린것'(0.2g) 안에 숨어 사라진다 — 양념이 붙었다는 사실이 지워진다.
+    # 조리법이 비어 있어도 묶는다. '멥쌀밥_추청벼_백미' 처럼 이름 자체가 조리된
+    # 상태인 것들은 조리법 칸이 없어서, 이 조건이 method 를 요구하는 동안
+    # 품종 24종이 '쌀밥' 검색 결과를 그대로 도배했다. 어차피 아래에서 답이
+    # 같은지·영양성분이 비슷한지를 다시 보므로 여기서 걸러낼 이유가 없다.
     buckets: dict[tuple, list[dict]] = {}
     for f in foods:
-        if f["group"] and f["method"]:
+        if f["group"]:
             buckets.setdefault(
                 (f["group"], f["method"], f.get("seasoning")), []).append(f)
 
@@ -354,6 +375,7 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]],
         for f in items:
             if f is not rep:
                 removed_ids.add(f["id"])
+                _inherit_search(rep, f)
 
     merged_foods = [f for f in foods if f["id"] not in removed_ids]
     for ids in groups.values():
@@ -390,8 +412,19 @@ def build(base: Path):
     sodium_none_count = 0
 
     for r in records:
+        # 1인분으로 보기엔 너무 큰 포장(간편조리세트 등)만 1회 분량 환산에서 뺀다.
+        # 무게만으로 거르면 해장국·국밥처럼 원래 1kg 넘는 정상 1인분까지 걸린다.
+        packaged = is_package(r.name, r.serving_grams)
+        if packaged:
+            package_count += 1
+        # 규칙 4(한 번에 먹는 양)에 넘길 분량. 포장 전체는 한 사람이 한 번에
+        # 먹는 양이 아니므로 넘기지 않는다 — 넘기면 온 가족이 먹을 밀키트를
+        # 혼자 다 먹는 것으로 치고 판정하게 된다.
+        serving_grams = None if packaged else r.serving_grams
+
         verdict = judge(r.nutrients, r.gi_value,
-                        fiber_max=fiber_ceiling(r, fiber_caps))
+                        fiber_max=fiber_ceiling(r, fiber_caps),
+                        serving_grams=serving_grams)
 
         # 규칙 1(저탄수)로 초록이 된 항목은 GI 가 성립하지 않는 음식이다.
         # 빈칸이 아니라 'na' 로 표시해 화면에서 이유를 설명할 수 있게 한다.
@@ -410,11 +443,6 @@ def build(base: Path):
         if r.nutrients.sodium is None:
             sodium_none_count += 1
 
-        # 1인분으로 보기엔 너무 큰 포장(간편조리세트 등)만 1회 분량 환산에서 뺀다.
-        # 무게만으로 거르면 해장국·국밥처럼 원래 1kg 넘는 정상 1인분까지 걸린다.
-        packaged = is_package(r.name, r.serving_grams)
-        if packaged:
-            package_count += 1
         ps = None if packaged else per_serving(r.nutrients, r.serving_grams)
 
         # 나트륨 주의 자동 생성. 손으로 쓴 caution.csv 가 있으면 그것이 우선한다.
