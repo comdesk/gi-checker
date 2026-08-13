@@ -187,10 +187,11 @@ details.more[open] .chev{transform:rotate(180deg)}
 /* ── 영양성분: 기준이 다른 두 묶음을 상자로 가른다 ──
    .nut-group 도 .nut 안의 div 라서 기존 ".nut div{display:flex}" 규칙(명시성 0,1,1)에
    걸려 상자 전체가 flex 로 눌린다. ".nut .nut-group"(0,2,0)으로 다시 block 처리한다. */
-.nut .nut-group{display:block}
-/* 좌우 여백을 넉넉히 준다. 값이 오른쪽 끝에 붙는 표라 여백이 좁으면
-   '891mg' 같은 긴 숫자가 테두리에 닿아 갑갑해 보인다. */
-.nut-group{border:1px solid var(--line);border-radius:12px;padding:4px 20px 12px;
+/* padding·border-top 도 같은 함정에 걸린다. ".nut div"(0,1,1)가 ".nut-group"(0,1,0)을
+   이겨서, 상자에 준 좌우 여백이 통째로 무시되고 padding:11px 0 이 먹고 있었다 —
+   그래서 '열량'·'891mg' 이 테두리에 붙어 보였다. 여기서 같이 지정한다. */
+.nut .nut-group{display:block;padding:4px 18px 12px;border-top:1px solid var(--line)}
+.nut-group{border:1px solid var(--line);border-radius:12px;
            margin-bottom:12px;background:#fff}
 .nut-h{margin:12px 0 2px;font-size:14px;font-weight:800;letter-spacing:.03em;
        color:var(--ink3)}
