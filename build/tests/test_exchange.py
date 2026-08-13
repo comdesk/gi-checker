@@ -173,7 +173,7 @@ EYEBALL_GROUPS = {
     (100, "대 1/2개"): ["오렌지 생것"],
     (40, "1/10개"): ["호박 단호박"],
     (2, "1장"): ["김류 전체 말리기"],
-    (200, "1컵"): ["우유", "두유"],
+    (200, "1컵"): ["우유", "두유", "산양유"],
 }
 EYEBALL = {key: (grams, eyeball)
            for (grams, eyeball), keys in EYEBALL_GROUPS.items()
@@ -204,6 +204,21 @@ def test_액체는_mL_로_적는다(records):
     assert find(records, "우유").exchange["unit"] == "mL"
     # 고체는 단위를 싣지 않는다 — 화면 기본값이 g 다
     assert "unit" not in find(records, "사과_생것").exchange
+    assert "unit" not in find(records, "분유").exchange
+
+
+def test_가당우유는_교환표_식품이_아니다(records):
+    """4판이 '가당우유는 당류가 높고 칼슘이 낮으므로 피하고 흰우유를 선택한다'
+    고 한다. 딸기우유에 흰우유 분량을 붙이면 교환표 식품인 것처럼 읽힌다."""
+    assert find(records, "우유").exchange["grams"] == 200
+    assert find(records, "우유_딸기").exchange is None
+
+
+def test_가당_요구르트에_그릭요거트_분량이_안_붙는다(records):
+    """둘 다 '요구르트(액상)' 그룹에 있다. 그룹 키로 두면 가당 제품까지
+    교환표 식품이 된다 — 그릭요거트만 식품명으로 지목했다."""
+    assert find(records, "요구르트(액상)_그릭요거트").exchange["grams"] == 100
+    assert find(records, "요구르트(액상)_딸기요거트").exchange is None
 
 
 def test_말린_것과_생것의_분량이_다르다(records):
