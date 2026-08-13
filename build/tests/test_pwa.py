@@ -13,15 +13,30 @@ BUILD = Path(__file__).resolve().parent.parent
 WEB = BUILD.parent / "web"
 sys.path.insert(0, str(BUILD))
 
-from bundle import BUILD_VERSION, SW_VERSION_LINE
+from bundle import SW_VERSION_LINE, bundle_version
+
+
+def _sw_version() -> str:
+    m = SW_VERSION_LINE.search((WEB / "sw.js").read_text(encoding="utf-8"))
+    assert m, "sw.js 에서 VERSION 줄을 찾지 못했다"
+    return m.group(0).split("'")[1]
 
 
 def test_서비스워커_판이_번들과_같다():
     """서비스워커는 자기 파일 내용이 바뀌어야 새로 설치된다.
     데이터만 갱신하고 이 줄을 안 고치면 사용자는 영영 옛 foods.json 을 본다."""
-    m = SW_VERSION_LINE.search((WEB / "sw.js").read_text(encoding="utf-8"))
-    assert m, "sw.js 에서 VERSION 줄을 찾지 못했다"
-    assert f"'{BUILD_VERSION}'" in m.group(0), m.group(0)
+    bundle = json.loads((WEB / "foods.json").read_text(encoding="utf-8"))
+    assert _sw_version() == bundle["version"]
+
+
+def test_판이_데이터_내용을_따라간다():
+    """날짜만 쓰면 같은 날 두 번 빌드했을 때 판이 안 바뀌어, 데이터를 고쳐도
+    사용자 폰에는 옛것이 남는다. 판은 실제 데이터의 해시를 담아야 한다."""
+    bundle = json.loads((WEB / "foods.json").read_text(encoding="utf-8"))
+    assert bundle_version(bundle) == bundle["version"]
+
+    changed = {**bundle, "foods": bundle["foods"][:-1]}
+    assert bundle_version(changed) != bundle["version"]
 
 
 def test_캐싱_목록에_실제_파일이_다_있다():

@@ -90,6 +90,9 @@ class FoodRecord:
     # 원본에 값이 없어 같은 대표식품명에서 물려받은 항목들 ('sugar','fiber','fat').
     # 화면에 '추정치' 라고 밝히기 위해 남긴다 — 측정값인 척하면 안 된다.
     inherited: tuple[str, ...] = ()
+    # 식품교환표 1교환단위량 {grams, eyeball?, foodGroup, daily?}. 표시 전용이다 —
+    # 판정에 쓰면 안 되는 이유는 exchange.py 머리말에 적어두었다.
+    exchange: dict | None = None
     # 차감법으로 계산된 탄수화물이 믿을 만한지 검사하는 데만 쓴다. 화면에 안 나간다.
     protein: float | None = None
     water: float | None = None

@@ -1,6 +1,7 @@
 """foods.json 출력. 판정과 검색 인덱스를 여기서 계산한다."""
 
 import gzip
+import hashlib
 import json
 import re
 import sys
@@ -8,6 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 from statistics import quantiles
 
+from exchange import apply_exchange
 from gi_match import apply_gi
 from group import METHOD_PREFIX, METHOD_TOKENS, apply_groups, sample_tag
 from icons import build as build_icons
@@ -27,9 +29,23 @@ PUNCT = re.compile(r"[\s,·()\[\]/\-_.]+")
 SODIUM_CAUTION_MG = 1400
 
 # 이 번들의 판. foods.json 과 sw.js 가 같은 값을 쓴다 — 서비스워커는 자기 파일
-# 내용이 바뀌어야 새로 설치되므로, 데이터를 갱신했으면 여기를 올려야 사용자에게
+# 내용이 바뀌어야 새로 설치되므로, 데이터가 바뀌면 이 값도 바뀌어야 사용자에게
 # 전달된다. stamp_service_worker() 가 sw.js 에 박아 넣는다.
-BUILD_VERSION = "2026-08-13"
+#
+# 날짜만 쓰다가 사고가 날 뻔했다: 같은 날 두 번 빌드하면 데이터가 바뀌어도
+# 이 값이 그대로라 sw.js 의 바이트가 안 변하고, 그러면 브라우저가 새 서비스
+# 워커를 설치하지 않아 사용자는 영영 옛 foods.json 을 본다. 사람이 기억해서
+# 올릴 일이 아니므로 실제 데이터의 해시를 뒤에 붙인다 — 데이터가 한 글자라도
+# 달라지면 판이 저절로 달라진다.
+BUILD_DATE = "2026-08-13"
+
+
+def bundle_version(payload: dict) -> str:
+    """날짜 + 데이터 내용 해시. 같은 데이터면 같은 값이라 빌드는 여전히 재현된다."""
+    body = json.dumps({k: v for k, v in payload.items() if k != "version"},
+                      ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:8]
+    return f"{BUILD_DATE}+{digest}"
 
 # 1인분으로 보기엔 너무 큰 포장. 이 이상이면서 밀키트 이름 표시가 있는 경우에만
 # perServing(1회 분량) 계산과 나트륨 주의를 건너뛴다.
@@ -408,6 +424,9 @@ def build(base: Path):
     fill_stats = fill_missing(records)
     fiber_caps = fiber_ratio_caps(records)
     gi_stats = apply_gi(records, base / "data" / "gi_map.csv")
+    # 식품교환표 1교환단위량. 표시 전용이라 judge() 로 넘기지 않는다 —
+    # 이유는 exchange.py 머리말에 적어두었다.
+    exchange_stats = apply_exchange(records, base / "data" / "exchange.csv")
 
     foods, groups = [], {}
     level_counts = {"green": 0, "amber": 0, "red": 0, "unknown": 0}
@@ -486,6 +505,9 @@ def build(base: Path):
             # 화면에서 '추정' 이라고 밝힌다. null 은 끝내 모른다는 뜻이다.
             "estimated": list(r.inherited),
             "perServing": ps,
+            # 식품교환표 1회 분량. 없으면 아예 싣지 않는다 (4천 건에 null 을
+            # 넣을 이유가 없다). 판정에는 안 쓴다 — 화면에만 나간다.
+            **({"exchange": r.exchange} if r.exchange else {}),
             "gi": {
                 "value": gi_value,
                 "kind": gi_kind,
@@ -529,12 +551,13 @@ def build(base: Path):
         groups[name].sort(key=lambda fid: order[fid])
 
     bundle = {
-        "version": BUILD_VERSION,
         "groups": {k: v for k, v in groups.items() if len(v) >= 2},
         "foods": foods,
     }
+    bundle = {"version": bundle_version(bundle), **bundle}
     stats = {
         "filter": filter_stats, "group": group_stats, "gi": gi_stats,
+        "exchange": exchange_stats,
         "level": level_counts, "kind": kind_counts,
         "sodium_caution": sodium_caution_count,
         "package": package_count, "sodium_none": sodium_none_count,
@@ -581,7 +604,7 @@ def main() -> int:
     text = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
     out.write_text(text, encoding="utf-8")
 
-    changed = stamp_service_worker(out.parent / "sw.js", BUILD_VERSION)
+    changed = stamp_service_worker(out.parent / "sw.js", bundle["version"])
     icons = build_icons(out.parent)
 
     raw_mb = len(text.encode("utf-8")) / 1_048_576
@@ -616,6 +639,19 @@ def main() -> int:
     markers = "/".join(PACKAGE_NAME_MARKERS)
     print(f"[포장 전체 제외(grams>={PACKAGE_GRAMS} 이고 이름에 '{markers}')] "
           f"{stats['package']:,}건 — perServing·나트륨 주의 대상에서 제외")
+    ex = stats["exchange"]
+    ex_shown = sum(1 for f in bundle["foods"] if f.get("exchange"))
+    print(f"[식품교환표 1회 분량] 화면에 나가는 {ex_shown:,}건 "
+          f"(합치기 전 {ex['붙음']:,}건, 키 {ex['쓰인 키']}개 전부 사용)")
+    print(f"  안전장치로 뺀 것: 부위 불일치 {ex['부위 불일치로 뺌']}건, "
+          f"말린 것에 생것 분량 {ex['말린 것에 생것 분량이라 뺌']}건, "
+          f"교환단위 정의와 어긋남 {ex['교환단위와 어긋나 뺌']}건")
+    for line in ex["뺀 목록"]:
+        print(f"    {line}")
+    if ex["안 쓰인 키"]:
+        print(f"  경고: 어디에도 안 붙은 키 {ex['안 쓰인 키']}개 — "
+              "exchange.csv 의 키가 데이터와 안 맞습니다. build/exchange.py 로 확인하세요.")
+
     print(f"[나트륨 모름(None)] {stats['sodium_none']:,}건 "
           f"({stats['sodium_none'] / total * 100:.1f}%) — 원본 공란, 0으로 채우지 않음")
 
@@ -655,7 +691,7 @@ def main() -> int:
         for r in merge["skipped"][:20]:
             print(f"    {r['group']}/{r['method']} ({r['count']}건): "
                   f"탄수화물 {r['carb_min']:g}~{r['carb_max']:g}g (편차 {r['carb_spread']:g}g)")
-    print(f"[오프라인] sw.js VERSION={BUILD_VERSION} "
+    print(f"[오프라인] sw.js VERSION={bundle['version']} "
           f"({'갱신함' if changed else '이미 같음'}), 아이콘 {len(icons)}개 — "
           "첫 실행 뒤로는 네트워크 없이 열린다")
     print(f"\n파일 크기: {raw_mb:.1f}MB (gzip {gz_mb:.1f}MB) → {out}")

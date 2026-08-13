@@ -68,6 +68,64 @@ test('목록 화면(listItem)에는 품종 줄이 나오지 않는다 — 목록
   assert.ok(!html.includes('품종'), html);
 });
 
+// ── 한 번에 먹어도 되는 양 (식품교환표 1교환단위량) ──────────────
+// 앱이 '먹어도 되나' 만 답하면 부족하다 — 사과가 초록이라고 세 개를 드시면
+// 초록인 의미가 없다. 다만 '드시지 마세요' 아래에 분량을 적으면 먹어도
+// 된다는 말로 읽히므로 빨강·알 수 없음에는 내보내지 않는다.
+
+const APPLE = { grams: 80, eyeball: '중 1/3개', foodGroup: '과일군', daily: '하루 1~2번' };
+
+test('1회 분량이 있으면 한 번에 이만큼 상자가 나온다', () => {
+  const html = detailScreen(base({ exchange: APPLE }), null);
+  assert.ok(html.includes('한 번에 이만큼'), html);
+  assert.ok(html.includes('80g'), html);
+  assert.ok(html.includes('중 1/3개'), html);
+  assert.ok(html.includes('하루 1~2번'), html);
+  assert.ok(html.includes('대한당뇨병학회 식품교환표'), html);
+});
+
+test('1회 분량 자료가 없으면 상자가 없다', () => {
+  const html = detailScreen(base(), null);
+  assert.ok(!html.includes('한 번에 이만큼'), html);
+});
+
+test('빨강이면 1회 분량을 말하지 않는다 — 먹어도 된다는 말로 읽힌다', () => {
+  const food = base({ exchange: APPLE, verdict: { level: 'red', reason: 'gi' } });
+  const html = detailScreen(food, null);
+  assert.ok(!html.includes('한 번에 이만큼'), html);
+});
+
+test('판단할 수 없으면 1회 분량을 말하지 않는다', () => {
+  const food = base({
+    exchange: APPLE, verdict: { level: 'unknown', reason: 'insufficient' },
+  });
+  const html = detailScreen(food, null);
+  assert.ok(!html.includes('한 번에 이만큼'), html);
+});
+
+test('목측량과 하루 횟수는 없어도 상자가 나온다', () => {
+  const food = base({ exchange: { grams: 150, foodGroup: '과일군' } });
+  const html = detailScreen(food, null);
+  assert.ok(html.includes('한 번에 이만큼'), html);
+  assert.ok(html.includes('150g'), html);
+  assert.ok(!html.includes('하루'), html);
+});
+
+test('단위가 있으면 그것을 쓴다 — 우유는 g 이 아니라 mL 다', () => {
+  const food = base({
+    exchange: { grams: 200, eyeball: '1컵', foodGroup: '우유군', unit: 'mL' },
+  });
+  const html = detailScreen(food, null);
+  assert.ok(html.includes('200mL'), html);
+  assert.ok(!html.includes('200g'), html);
+});
+
+test('1회 분량은 영양성분의 100g 기준과 다른 자리에 나온다', () => {
+  // 두 숫자를 같은 상자에 섞으면 몇 배씩 잘못 읽는다 (실제로 겪은 문제).
+  const html = detailScreen(base({ exchange: APPLE }), null);
+  assert.ok(html.indexOf('한 번에 이만큼') < html.indexOf('영양성분 자세히 보기'), html);
+});
+
 // ── 판단할 수 없는 음식(unknown) ────────────────────────────────
 // 원본에 당류·식이섬유가 없어 최선/최악의 판정이 갈리는 경우다.
 // 신호등의 네 번째 색이 아니라 '신호등을 켤 수 없음' 이다.

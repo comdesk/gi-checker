@@ -119,6 +119,18 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 
 .fact{margin:24px 22px 0;font-size:18px;line-height:1.6;color:var(--ink2)}
 .fact b{color:var(--ink);font-weight:700}
+
+/* ── 한 번에 먹어도 되는 양 (식품교환표) ──
+   신호등 색을 쓰지 않는다. 이것은 '좋다/나쁘다' 가 아니라 '이만큼' 이라는
+   분량 정보라서, 색을 입히면 네 번째 판정처럼 읽힌다.
+   숫자를 크게 두는 것이 이 상자의 목적이다 — 60대 부모님이 안경 없이 읽는다. */
+.portion{margin:18px 22px 0;padding:15px 18px;border-radius:14px;
+         background:#f5f8fb;border:1.5px solid var(--line)}
+.portion-h{margin:0;font-size:14px;font-weight:800;letter-spacing:.03em;color:var(--ink3)}
+.portion-v{margin:5px 0 0;font-size:19px;line-height:1.35;color:var(--ink2)}
+.portion-v b{font-size:32px;font-weight:800;letter-spacing:-.03em;color:var(--ink)}
+.portion-e{margin-left:4px;font-weight:700}
+.portion-sub{margin:7px 0 0;font-size:14px;line-height:1.5;color:var(--ink3)}
 details.more{margin:16px 22px 24px;border:1px solid var(--line);border-radius:14px;
              background:#fbfcfd;overflow:hidden}
 details.more summary{padding:16px;text-align:center;font-size:17px;font-weight:700;
