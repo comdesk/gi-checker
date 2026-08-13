@@ -386,10 +386,21 @@ def merge_variants(foods: list[dict], groups: dict[str, list[str]],
         if len(variants) >= 2:
             rep["variants"] = variants
 
+        # 지방 편차도 남긴다. 합치기 억제는 탄수화물만 보는데 고기·생선은
+        # 탄수화물이 0에 가까워 그 검사가 무력하다 — 지방이 몇 배 달라도
+        # 한 줄이 되고, 화면에는 대표 하나의 지방이 나간다. 막지는 못해도
+        # 얼마나 숨어 있는지는 리포트에 보여야 한다.
+        # 단위 테스트의 최소 dict 에는 지방이 없다 — 있을 때만 본다.
+        fats = [v for f in items
+                if (v := f["nutrients"].get("fat")) is not None]
+        fat_spread = round(max(fats) - min(fats), 1) if len(fats) >= 2 else 0.0
+
         reports.append({
             "group": group, "method": method, "count": len(items),
             "display": rep["display"], "variants": variants,
             "carb_min": carb_min, "carb_max": carb_max, "carb_spread": spread,
+            "fat_min": min(fats) if fats else None,
+            "fat_max": max(fats) if fats else None, "fat_spread": fat_spread,
             "members": [f["name"] for f in items],
         })
 
@@ -687,6 +698,17 @@ def main() -> int:
         print(f"    {r['group']}/{r['method']} ({r['count']}건, {r['display']}): "
               f"탄수화물 {r['carb_min']:g}~{r['carb_max']:g}g (편차 {r['carb_spread']:g}g) "
               f"품종 {', '.join(r['variants']) or '(없음)'}")
+    # 지방이 벌어진 채로 합쳐진 묶음. 신호등은 안 바뀌지만(고기는 다 초록)
+    # 영양성분표에 대표 하나의 지방이 나가므로 그만큼 잘못 읽힌다.
+    fatty = sorted((r for r in merge["reports"] if r["fat_spread"] >= 10),
+                   key=lambda r: -r["fat_spread"])
+    if fatty:
+        print(f"  [지방이 {10}g 이상 벌어진 채로 합쳐진 묶음: {len(fatty)}개 "
+              "— 합치기 억제가 탄수화물만 보기 때문이다]")
+        for r in fatty[:10]:
+            print(f"    {r['display']} ({r['count']}건): "
+                  f"지방 {r['fat_min']:g}~{r['fat_max']:g}g")
+
     if merge["skipped"]:
         print(f"  [답은 같지만 편차가 커서 합치지 않은 묶음: {len(merge['skipped'])}건 "
               f"(탄수화물 {CARB_RATIO_LIMIT:g}배 이상 & {CARB_RATIO_FLOOR:g}g 이상)]")

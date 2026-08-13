@@ -159,22 +159,81 @@ def load_species_split(path: Path) -> dict[str, dict[str, str]]:
     return out
 
 
+def _marker_candidates(part: str):
+    """조각 하나에서 마커일 수 있는 후보를 좁은 것부터.
+
+    원본이 조각을 세 가지로 꾸민다.
+      '단감+부유'        종 아래 품종을 '+' 로 붙임
+      '삼겹살(삼겹살)'    부위 뒤에 세부 이름을 괄호로 붙임
+      '한우(1++등급)'    등급도 괄호로 붙임
+    조각 전체로만 보면 '삼겹살' 마커에 안 걸려 부위가 통째로 새어나간다.
+
+    조각 전체를 먼저 본다 — 마커 자체에 괄호가 든 것이 있기 때문이다
+    ('대봉(갑주백목)'). 그것을 앞에서 잘라내면 안 된다.
+
+    괄호 **안쪽**을 바깥쪽보다 먼저 본다. 안쪽이 더 좁은 이름이기 때문이다 —
+    '앞다리(항정살)' 에서 항정살(지방 24.5g)과 앞다리(7.9g)가 둘 다 마커면
+    항정살로 가야 맞다. 안쪽을 마커로 적지 않으면 자연히 바깥쪽으로 간다.
+    """
+    inner = ""
+    if "(" in part and part.rstrip().endswith(")"):
+        inner = part[part.index("(") + 1:].rstrip()[:-1].strip()
+    seen = set()
+    for cand in (part, part.split("+")[0], inner, part.split("(")[0],
+                 part.split("+")[0].split("(")[0]):
+        cand = cand.strip()
+        if cand and cand not in seen:
+            seen.add(cand)
+            yield cand
+
+
+def _drop_repeated_paren(part: str) -> str:
+    """'삼겹살(삼겹살)'·'안심(안심살)' -> '안심'. 괄호가 앞말을 되풀이할 때만.
+
+    축산물 표기가 부위를 '부위명(부위명살)' 로 적는다 — 안심(안심살),
+    목심(목심살), 채끝(채끝살). 뒤엣것은 앞엣것의 다른 이름일 뿐이다.
+
+    괄호를 무조건 떼면 안 된다. 같은 자리에 진짜 다른 부위가 들어오기 때문이다.
+      앞다리(항정살)   항정살 지방 24.5g / 앞다리 7.9g
+      등심(등심덧살)   등심덧살 13.7g / 등심 4.6g
+      가슴(껍질 제거)  껍질을 뗀 것과 안 뗀 것은 다르다
+    그래서 '똑같은 말' 이거나 '뒤에 살 만 붙은 말' 일 때로 좁힌다 —
+    등심덧살은 '등심살' 이 아니므로 그대로 남는다.
+    """
+    head, sep, rest = part.partition("(")
+    if not sep:
+        return part
+    head, inner = head.strip(), rest.rstrip(")").strip()
+    return head if inner in (head, f"{head}살") else part
+
+
+def _reducible_to(part: str, marker: str) -> bool:
+    """이 조각을 마커로 갈음해도 잃는 정보가 없는가.
+
+    괄호 안쪽이 마커면 갈음해도 된다 — '앞다리(항정살)' → '항정살' 은 앞다리를
+    잃지만 항정살이 앞다리의 일부라 이름으로 충분하다.
+
+    반대로 마커가 바깥쪽이면 안 된다. '등심(등심덧살)' 을 '등심' 으로 바꾸면
+    지방이 세 배인 등심덧살이 등심으로 둔갑한다 — 되풀이('등심(등심살)')와
+    달리 괄호 안이 진짜 다른 부위인 경우다.
+    """
+    if part == marker or _drop_repeated_paren(part) == marker:
+        return True
+    if "(" in part and part.rstrip().endswith(")"):
+        return part[part.index("(") + 1:].rstrip()[:-1].strip() == marker
+    return False
+
+
 def _find_species(name: str, rep_name: str,
                   splits: dict[str, dict[str, str]]) -> str | None:
-    """이름에서 분리 마커를 찾아 돌려준다 (화면이름이 아니라 마커).
-
-    원본은 종 아래 품종을 '+' 로 붙여 적기도 한다 — '감_단감+부유_생것'.
-    조각 전체('단감+부유')로만 보면 마커 '단감' 에 안 걸려 네 품종이 새어나간다.
-    """
+    """이름에서 분리 마커를 찾아 돌려준다 (화면이름이 아니라 마커)."""
     markers = splits.get(rep_name)
     if not markers:
         return None
     for part in (p.strip() for p in name.split("_")):
-        if part in markers:
-            return part
-        base = part.split("+")[0].strip()
-        if base and base in markers:
-            return base
+        for cand in _marker_candidates(part):
+            if cand in markers:
+                return cand
     return None
 
 
@@ -335,6 +394,10 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
     # 키 '호박 단호박' 은 다른 그룹과 겹치지 않기 위한 것이고,
     # 사람이 부르는 이름은 그냥 '단호박' 이다.
     labels: dict[int, str] = {}
+    # 종 분리에 쓰인 원본 조각. 화면 이름을 정할 때 필요하다 —
+    # '돼지고기_앞다리(항정살)_생것' 은 조각이 '앞다리(항정살)' 인데 그룹은
+    # '돼지고기 항정살' 이라, 조각을 그대로 대조하면 영영 안 맞는다.
+    species_parts: dict[int, str] = {}
 
     for r in records:
         r.seasoning = _find_seasoning(r.name)
@@ -361,6 +424,7 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
                 # 조각과 부르는 말이 다르면(조각 '천도' / 말 '천도복숭아')
                 # species_split.csv 의 label 을 쓴다.
                 labels[id(r)] = splits[r.rep_name][species]
+                species_parts[id(r)] = species
                 stats["종분리"] += 1
 
             part = _find_part(r.name)
@@ -390,7 +454,18 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
         # 그때도 단순형으로 본다.
         label = labels.get(id(r), r.group)
         r.group_label = label
-        simple = (len(parts) >= 2 and " ".join(parts[:-1]) == r.group
+        head = " ".join(_drop_repeated_paren(p) for p in parts[:-1])
+        # 종 분리에 쓰인 조각은 마커로 바꿔놓고 대조한다. 마커가 괄호 안에서
+        # 나온 경우('앞다리(항정살)' → '항정살') 조각 그대로는 그룹과 안 맞는데,
+        # 그 조각이 곧 마커라 이름에서 잃는 정보가 없다.
+        marker = species_parts.get(id(r))
+        if marker:
+            swapped = " ".join(
+                marker if _reducible_to(p, marker) else p for p in parts[:-1])
+            if swapped == r.group:
+                head = swapped
+        simple = (len(parts) >= 2
+                  and (" ".join(parts[:-1]) == r.group or head == r.group)
                   and parts[-1].strip() in METHOD_TOKENS)
 
         if prefix and simple:

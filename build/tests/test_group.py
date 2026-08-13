@@ -239,6 +239,64 @@ def test_부위는_홀로_서지_않는다(records):
     assert leaf[0].display == "데친 호박 잎", leaf[0].display
 
 
+# ── 고기 부위 ──────────────────────────────────────────────
+# 합치기 억제(_too_spread_to_merge)가 탄수화물만 보는데 고기는 탄수화물이
+# 0에 가깝다. 그래서 지방이 몇 배 달라도 한 줄로 합쳐졌다 — 돼지고기 30부위가
+# '생 돼지고기' 하나가 되고 대표로 뽑힌 갈비의 지방 17.1g 이 표시됐다.
+# 삼겹살(35.7g)을 찾은 사람에게 절반을 보여준 셈이다.
+
+def test_돼지_부위가_갈린다(records):
+    by_group = {}
+    for r in records:
+        if r.rep_name == "돼지고기" and r.group:
+            by_group.setdefault(r.group, []).append(r)
+    for cut in ("삼겹살", "안심", "등심", "목심", "앞다리", "뒷다리"):
+        assert f"돼지고기 {cut}" in by_group, sorted(by_group)
+
+
+def test_삼겹살은_삼겹살_지방을_보여준다(records):
+    """예전에는 '생 돼지고기'(갈비 17.1g) 안에 묻혀 있었다."""
+    r = next(r for r in records if r.name == "돼지고기_삼겹살_생것")
+    assert r.group == "돼지고기 삼겹살"
+    assert r.display == "생 삼겹살", r.display
+    assert r.nutrients.fat > 30
+
+
+def test_괄호_안쪽_이름도_부위로_잡는다(records):
+    """원본이 '앞다리(항정살)' 로 적는다. 바깥쪽만 보면 항정살(지방 24.5g)이
+    앞다리(7.9g) 안에 묻힌다 — 둘 다 마커면 좁은 쪽으로 가야 한다.
+
+    (레코드가 하나뿐이라 그룹은 단독그룹해제로 풀린다. 이름만 본다)"""
+    r = next(r for r in records if r.name == "돼지고기_앞다리(항정살)_생것")
+    assert r.display == "생 항정살", r.display
+
+
+def test_같은_부위의_다른_이름은_안_갈린다(records):
+    """'앞다리(앞다리살)' 은 앞다리를 되풀이한 것뿐이다. 갈라놓으면
+    앞다리가 두 줄로 나온다."""
+    r = next(r for r in records if r.name == "돼지고기_앞다리(앞다리살)_생것")
+    assert r.group == "돼지고기 앞다리"
+
+
+def test_등심덧살은_등심으로_뭉개지_않는다(records):
+    """'등심(등심살)' 은 되풀이지만 '등심(등심덧살)' 은 지방이 세 배인 다른
+    부위다. 괄호를 무조건 떼면 등심덧살이 등심으로 둔갑한다."""
+    plain = next(r for r in records if r.name == "돼지고기_등심(등심살)_생것")
+    extra = next(r for r in records if r.name == "돼지고기_등심(등심덧살)_생것")
+    assert plain.display == "생 돼지 등심", plain.display
+    assert "등심덧살" in extra.display, extra.display
+
+
+def test_소_등급은_갈리지_않는다(records):
+    """1++·1+ 등급 차이는 혈당과 무관한 잡음이다. 갈라놓으면 등심이
+    등급 수만큼 줄이 늘어난다 — 등급별로 갈린 그룹이 있으면 안 된다."""
+    groups = {r.group for r in records
+              if r.rep_name == "소고기" and r.group and "등심" in r.group}
+    assert groups <= {"소고기 등심", "소고기 꽃등심살", "소고기 살치살"}, groups
+    assert "소고기 등심" in groups, groups
+    assert not any("등급" in g for g in groups), groups
+
+
 def test_난백과_난황은_다른_그룹이다(records):
     """Task 11B 에서 '함께 먹는 부위' 라며 뺐던 판단을 뒤집었다.
     원본은 난백(탄수 0.1g)과 난황(5.8g)을 따로 재어 놓았다."""
