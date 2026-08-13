@@ -128,7 +128,7 @@ def _find_seasoning(name: str) -> str | None:
     return None
 
 
-def load_species_split(path: Path) -> dict[str, set[str]]:
+def load_species_split(path: Path) -> dict[str, dict[str, str]]:
     """대표식품명 아래에 사실 서로 다른 음식이 묶여 있는 경우의 분리 목록.
 
     '호박' 안에 애호박·단호박·쥬키니가 함께 있으면 조리법 비교가 채소 비교로
@@ -137,10 +137,15 @@ def load_species_split(path: Path) -> dict[str, set[str]]:
 
     영양성분 편차만으로는 이 둘을 가를 수 없다 — 경계선에서 흔들리는 같은
     음식과 구분이 안 된다. 사람이 판단해 적는다.
+
+    반환: {대표식품명: {마커: 화면이름}}. 마커는 원본 이름('복숭아_천도_생것')
+    에서 찾을 조각이고 화면이름은 사람이 부르는 말이다. 보통 같지만
+    ('애호박'·'단호박') 다를 때가 있다 — 조각은 '천도' 인데 사람은
+    '천도복숭아' 라고 한다. label 을 비워두면 마커를 그대로 쓴다.
     """
     if not path.exists():
         return {}
-    out: dict[str, set[str]] = {}
+    out: dict[str, dict[str, str]] = {}
     with path.open(encoding="utf-8-sig", newline="") as f:
         for lineno, row in enumerate(csv.DictReader(f), start=2):
             rep, marker = (row.get("rep_name") or "").strip(), (row.get("marker") or "").strip()
@@ -150,11 +155,13 @@ def load_species_split(path: Path) -> dict[str, set[str]]:
                 raise SystemExit(f"species_split.csv:{lineno} '{rep}' 의 marker 가 비었습니다")
             if not (row.get("note") or "").strip():
                 raise SystemExit(f"species_split.csv:{lineno} '{rep}' 에 근거(note)가 없습니다")
-            out.setdefault(rep, set()).add(marker)
+            out.setdefault(rep, {})[marker] = (row.get("label") or "").strip() or marker
     return out
 
 
-def _find_species(name: str, rep_name: str, splits: dict[str, set[str]]) -> str | None:
+def _find_species(name: str, rep_name: str,
+                  splits: dict[str, dict[str, str]]) -> str | None:
+    """이름에서 분리 마커를 찾아 돌려준다 (화면이름이 아니라 마커)."""
     markers = splits.get(rep_name)
     if not markers:
         return None
@@ -344,7 +351,9 @@ def apply_groups(records, map_path: Path) -> dict[str, int]:
                 r.group = f"{r.group} {species}"
                 # 분리된 종은 그 자체로 사람이 쓰는 이름이다 ('단호박', '백미').
                 # '데친 호박 단호박' 이 아니라 '데친 단호박' 이라고 해야 읽힌다.
-                labels[id(r)] = species
+                # 조각과 부르는 말이 다르면(조각 '천도' / 말 '천도복숭아')
+                # species_split.csv 의 label 을 쓴다.
+                labels[id(r)] = splits[r.rep_name][species]
                 stats["종분리"] += 1
 
             part = _find_part(r.name)

@@ -261,3 +261,23 @@ def test_분류명_앞머리를_이름에서_뗀다():
     assert _readable("리소토/리조또") == "리소토/리조또"
     # 괄호 안의 '/' 는 분류명이 아니라 다른 이름을 병기한 것이다
     assert _readable("완자전_소고기(동그랑땡/육원전)") == "완자전 소고기(동그랑땡/육원전)"
+
+
+def test_종분리_마커와_화면이름을_따로_둘_수_있다():
+    """마커는 원본 이름에서 찾을 조각이고, 화면 이름은 사람이 부르는 말이다.
+    보통은 같지만('애호박', '단호박') 다를 때가 있다 —
+    '복숭아_천도_생것' 의 조각은 '천도' 지만 사람은 '천도복숭아' 라고 한다.
+    label 을 안 적으면 마커를 그대로 쓴다."""
+    import csv, tempfile
+    from pathlib import Path
+    from group import load_species_split
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "species_split.csv"
+        with p.open("w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["rep_name", "marker", "note", "label"])
+            w.writerow(["복숭아", "천도", "근거", "천도복숭아"])
+            w.writerow(["호박", "애호박", "근거", ""])
+        out = load_species_split(p)
+    assert out["복숭아"]["천도"] == "천도복숭아"
+    assert out["호박"]["애호박"] == "애호박"
