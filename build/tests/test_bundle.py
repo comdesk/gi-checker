@@ -18,7 +18,7 @@ from group import PART_PATTERN
 LEVELS = {"green", "amber", "red", "unknown"}
 KINDS = {"measured", "estimated", "na", "none"}
 REASONS = {"low-carb", "gi", "gi+sweet", "nutrient", "nutrient+sweet",
-           "insufficient", "serving"}
+           "insufficient", "serving", "alcohol"}
 CATEGORIES = {"채소", "과일", "밥·면·빵", "국·찌개", "고기·생선", "간식·음료", "기타"}
 
 

@@ -86,6 +86,10 @@ class FoodRecord:
     alias: list[str] = field(default_factory=list)
     source: str | None = None   # None = 원본 CSV, 문자열 = 보충 레코드 출처
     caution: str | None = None  # 표시용 주의 문구. 신호등 등급은 바꾸지 않는다
+    # 술인가. caution 과 달리 이것은 등급을 바꾼다 — 판정 규칙(score.py)이
+    # 탄수화물만 재기 때문에 술은 규칙 자체가 성립하지 않는다.
+    # 근거와 판단은 data/alcohol.csv 머리말에 있다.
+    is_alcohol: bool = False
     is_prepared: bool = False   # True = 음식.csv(조리식품) 출처. 원재료성 중복 정리에만 쓴다
     # 원본에 값이 없어 같은 대표식품명에서 물려받은 항목들 ('sugar','fiber','fat').
     # 화면에 '추정치' 라고 밝히기 위해 남긴다 — 측정값인 척하면 안 된다.
@@ -262,6 +266,43 @@ def apply_caution(records: list, path: Path) -> int:
             r.caution = caution
             applied += 1
     return applied
+
+
+def load_alcohol(path: Path) -> set[str]:
+    """술 목록. key 는 대표식품명 또는 식품명과 일치시킨다.
+
+    caution.csv 와 달리 이 표는 신호등 등급을 바꾼다 — 술은 판정 규칙이
+    잴 수 없는 대상이라 '주의' 로 고정한다. 이유는 data/alcohol.csv 머리말에
+    적어두었다. 여기서는 이름만 읽고, 등급 결정은 score.py 가 한다.
+    """
+    if not path.exists():
+        return set()
+    rows = [ln for ln in path.read_text(encoding="utf-8-sig").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")]
+    keys: set[str] = set()
+    for lineno, row in enumerate(csv.DictReader(rows), start=2):
+        key = _clean(row.get("key"))
+        if not key:
+            continue
+        if not _clean(row.get("note")):
+            raise SystemExit(f"alcohol.csv '{key}' 에 note 가 없습니다")
+        keys.add(key)
+    return keys
+
+
+def apply_alcohol(records: list, path: Path) -> int:
+    """보충 레코드 적재 이후에 호출한다. 표시한 건수를 반환한다."""
+    keys = load_alcohol(path)
+    if not keys:
+        return 0
+    marked = 0
+    for r in records:
+        if r.rep_name in keys or r.name in keys:
+            r.is_alcohol = True
+            marked += 1
+    if marked == 0:
+        raise SystemExit("alcohol.csv 의 키가 어느 레코드에도 붙지 않았습니다")
+    return marked
 
 
 _METHOD_WORD_TO_METHOD = dict(METHOD_WORDS)
@@ -720,6 +761,9 @@ def load_records(raw_dir: Path, allow_path: Path):
     # 표시용 주의 문구. 신호등 등급을 매기는 규칙(score.py)이 전부 끝난 뒤에만 붙인다 —
     # 이 값은 화면 표시 전용이며 어떤 판정 로직에도 입력으로 쓰이지 않는다.
     stats["주의문구"] = apply_caution(kept, allow_path.parent / "caution.csv")
+
+    # 술 표시. 이것만은 표시 전용이 아니라 등급을 바꾼다 — score.py 의 규칙 0.
+    stats["술"] = apply_alcohol(kept, allow_path.parent / "alcohol.csv")
 
     stats["남은건수"] = len(kept)
     return kept, stats

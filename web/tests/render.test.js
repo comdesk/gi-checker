@@ -305,3 +305,45 @@ test('목록에서도 양념 여부가 보인다', () => {
   assert.ok(listItem(seasoned()).includes('양념'));
   assert.ok(!listItem(plain()).includes('양념'));
 });
+
+// ── 술 ─────────────────────────────────────────────────────
+// 술은 탄수화물이 거의 없어 규칙 1 로 초록이 됐었다. 소주 화면에
+// '좋음 / 탄수화물이 적어 혈당에 거의 영향 없어요' 가 떴다 — 밑에 저혈당
+// 주의 문구가 있었는데도 머리글이 그것을 정면으로 부정했다.
+// 이제 규칙 0(score.py)이 '주의' 로 고정한다. 문구가 되돌아가지 않도록 못 박는다.
+
+const SOJU = () => base({
+  display: '소주', category: '간식·음료',
+  nutrients: { kcal: 127, carb: 0.08, sugar: 0, fiber: 0, fat: 0, sodium: null },
+  gi: { value: null, kind: 'na', basis: null },
+  verdict: { level: 'amber', reason: 'alcohol' },
+  caution: '술은 혈당을 급격히 떨어뜨릴 수 있습니다. 당뇨약을 드신다면 반드시 의사와 상의하세요.',
+});
+
+test('술에는 탄수화물이 적어 괜찮다는 말을 하지 않는다', () => {
+  const html = detailScreen(SOJU(), null);
+  assert.ok(!html.includes('탄수화물이 적어 혈당에 거의 영향 없어요'),
+    '술에 저탄수 안심 문구가 붙었다');
+  assert.ok(html.includes('술은 탄수화물과 다르게 봐야 합니다'), html);
+});
+
+test('술의 GI 칸은 저탄수가 아니라 술이라서 비었다고 말한다', () => {
+  const html = detailScreen(SOJU(), null);
+  assert.ok(html.includes('술은 GI 로 판정하지 않습니다'), html);
+  assert.ok(!html.includes('탄수화물이 적어 GI 가 성립하지 않습니다'), html);
+});
+
+test('술의 저혈당 주의 문구는 그대로 나간다', () => {
+  const html = detailScreen(SOJU(), null);
+  assert.ok(html.includes('혈당을 급격히 떨어뜨릴 수 있습니다'), html);
+});
+
+test('술이 아닌 저탄수 음식은 문구가 그대로다', () => {
+  // 위 두 문구를 술 쪽으로 옮기면서 3,556건이 휩쓸리지 않았는지 본다.
+  const html = detailScreen(base({
+    gi: { value: null, kind: 'na', basis: null },
+    verdict: { level: 'green', reason: 'low-carb' },
+  }), null);
+  assert.ok(html.includes('탄수화물이 적어 혈당에 거의 영향 없어요'), html);
+  assert.ok(html.includes('탄수화물이 적어 GI 가 성립하지 않습니다'), html);
+});

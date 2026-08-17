@@ -13,6 +13,10 @@ export const REASON_LINE = {
   // GI 는 '얼마나 빨리 오르나'지 '얼마나 오르나'가 아니다. 자장면은 GI 46 으로
   // 낮지만 한 그릇에 탄수화물이 175g — 쌀밥 세 공기다.
   serving: '한 번에 드시는 양이 많습니다',
+  // 술은 탄수화물이 거의 없어 규칙 1 로는 초록이 되지만, 알코올은 간이
+  // 포도당 만드는 것을 막아 오히려 혈당을 떨어뜨린다. 신호등이 재는 축과
+  // 다른 축이라 '적으니 괜찮다' 는 말을 여기서 하면 안 된다.
+  alcohol: '술은 탄수화물과 다르게 봐야 합니다',
   insufficient: '영양성분 정보가 모자라 판단할 수 없어요',
 };
 
@@ -103,11 +107,15 @@ export function giMeter(food) {
   if (value == null) {
     // 판정 자체를 못 한 음식에 '영양성분으로 판정했습니다' 라고 하면
     // 바로 위 '판단할 수 없습니다' 와 정면으로 어긋난다.
+    // kind==='na' 가 되는 경우가 둘이다(bundle.py). 저탄수라서 GI 가
+    // 성립하지 않는 것과, 술이라 GI 로 볼 대상이 아닌 것은 다른 말이다.
     const message = level === 'unknown'
       ? 'GI 자료도 없습니다'
-      : kind === 'na'
-        ? '탄수화물이 적어 GI 가 성립하지 않습니다'
-        : 'GI 자료가 없어 영양성분으로 판정했습니다';
+      : food.verdict.reason === 'alcohol'
+        ? '술은 GI 로 판정하지 않습니다'
+        : kind === 'na'
+          ? '탄수화물이 적어 GI 가 성립하지 않습니다'
+          : 'GI 자료가 없어 영양성분으로 판정했습니다';
     return `<div class="gi-box">
       <div class="gi-top"><span class="gi-l">GI 지수</span>
         <span class="gi-v"><span class="gi-n" style="color:var(--ink3)">—</span></span></div>

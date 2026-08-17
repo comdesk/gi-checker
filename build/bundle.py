@@ -507,11 +507,14 @@ def build(base: Path):
 
         verdict = judge(r.nutrients, r.gi_value,
                         fiber_max=fiber_ceiling(r, fiber_caps),
-                        serving_grams=serving_grams)
+                        serving_grams=serving_grams,
+                        is_alcohol=r.is_alcohol)
 
-        # 규칙 1(저탄수)로 초록이 된 항목은 GI 가 성립하지 않는 음식이다.
-        # 빈칸이 아니라 'na' 로 표시해 화면에서 이유를 설명할 수 있게 한다.
-        gi_kind = "na" if verdict.reason == "low-carb" else r.gi_kind
+        # GI 로 판정하지 않은 항목은 GI 칸을 빈칸이 아니라 'na' 로 표시해
+        # 화면에서 이유를 설명할 수 있게 한다. 두 경우가 있다 —
+        # 규칙 1(저탄수)로 초록이 된 것, 그리고 규칙 0(술)이다.
+        # 이유가 다르므로 화면 문구도 갈린다(web/render.js 의 giMeter).
+        gi_kind = "na" if verdict.reason in ("low-carb", "alcohol") else r.gi_kind
         gi_value = None if gi_kind == "na" else r.gi_value
 
         level_counts[verdict.level] += 1

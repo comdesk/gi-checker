@@ -69,7 +69,8 @@ class Nutrients:
 @dataclass(frozen=True)
 class Verdict:
     level: str   # "green" | "amber" | "red" | "unknown"
-    reason: str  # "low-carb" | "gi" | "gi+sweet" | "nutrient" | "nutrient+sweet" | "insufficient"
+    reason: str  # "low-carb" | "gi" | "gi+sweet" | "nutrient" | "nutrient+sweet"
+                 # | "serving" | "alcohol" | "insufficient"
 
 
 def _downgrade(level: str) -> str:
@@ -95,6 +96,7 @@ def judge(
     sugar_abs: float = DEFAULT_SUGAR_ABS,
     fiber_max: float | None = None,
     serving_grams: float | None = None,
+    is_alcohol: bool = False,
 ) -> Verdict:
     """모르는 값이 있으면 가능한 범위의 양 끝을 판정해 답이 같을 때만 확정한다.
 
@@ -106,7 +108,23 @@ def judge(
     c=0(초록)이 되어 거의 다 unknown 이 된다. 그래서 호출부(bundle.py)가
     같은 카테고리에서 실제로 관찰된 식이섬유/탄수화물 비율의 상한을 넘겨준다.
     score.py 는 순수하게 유지해야 하므로 그 계산을 여기서 하지 않는다.
+
+    is_alcohol 은 '이것은 술이다' 는 사실을 호출부가 알려주는 것이다. 술인지
+    아닌지는 영양성분으로 알 수 없어(원본에 알코올 컬럼이 없다) 이름으로 적은
+    표를 bundle.py 가 읽어 넘긴다. 여기서 그 표를 읽지 않는 이유는 위와 같다.
     """
+    # 규칙 0 — 술은 이 규칙들이 잴 수 있는 대상이 아니다.
+    #
+    # 규칙 1~4 는 전부 탄수화물이 혈당을 얼마나 올리는가를 잰다. 알코올은
+    # 탄수화물이 아니라 자에 안 걸리고, 작용 방향도 반대다 — 간에서 포도당
+    # 만드는 것을 막아 혈당을 떨어뜨린다. 그래서 소주(소화탄수화물 0.08g)가
+    # 규칙 1 로 초록이 되어 '탄수화물이 적어 혈당에 거의 영향 없어요' 가
+    # 떴었다. 틀린 말은 아니지만, 그 문장을 근거로 초록불을 켜면 틀린다.
+    #
+    # 노랑인 이유는 data/alcohol.csv 머리말에 적어두었다.
+    if is_alcohol:
+        return Verdict("amber", "alcohol")
+
     if n.sugar is not None and n.fiber is not None and n.fat is not None:
         return _judge(n.carb, n.sugar, n.fiber, n.fat, gi,
                       fat_cut=fat_cut, sugar_cut=sugar_cut, sugar_abs=sugar_abs,
