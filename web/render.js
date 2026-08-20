@@ -387,7 +387,10 @@ export function detailScreen(food, members, backLabel = null) {
     : `<p class="fact">보통 한 번에 <b>${esc(food.serving.label)}</b></p>`;
 
   return `
-    <button class="nav" id="back"><span class="back">‹</span> ${esc(backLabel ?? '뒤로')}</button>
+    <div class="navrow">
+      <button class="nav" id="back"><span class="back">‹</span> ${esc(backLabel ?? '뒤로')}</button>
+      <button class="nav share" id="share" hidden>공유<span class="share-ic" aria-hidden="true">📤</span></button>
+    </div>
     <div class="accent" style="background:var(--${level})"></div>
     <div class="head">
       <h1 class="name">${esc(displayName(food))}</h1>

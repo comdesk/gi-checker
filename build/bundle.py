@@ -38,7 +38,7 @@ SODIUM_CAUTION_MG = 1400
 # 워커를 설치하지 않아 사용자는 영영 옛 foods.json 을 본다. 사람이 기억해서
 # 올릴 일이 아니므로 실제 데이터의 해시를 뒤에 붙인다 — 데이터가 한 글자라도
 # 달라지면 판이 저절로 달라진다.
-BUILD_DATE = "2026-08-13"
+BUILD_DATE = "2026-08-20"
 
 
 def bundle_version(payload: dict) -> str:

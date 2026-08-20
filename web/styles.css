@@ -26,6 +26,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 .nav{display:flex;align-items:center;gap:11px;padding:15px 20px;
      font-size:17px;font-weight:600;color:var(--ink2);min-height:44px}
 .nav .back{font-size:21px;color:var(--ink);line-height:1}
+/* 뒤로가기와 공유를 한 줄의 양끝에. 공유는 기능이 없는 브라우저에서 숨는다 */
+.navrow{display:flex;align-items:center;justify-content:space-between}
+.nav.share{gap:7px}
+/* .nav 의 display:flex 가 hidden 속성(UA 의 display:none)을 이겨버린다 */
+.nav.share[hidden]{display:none}
+.nav.share .share-ic{font-size:19px;line-height:1}
 .sec{margin:28px 20px 0}
 .sec-h{font-size:15px;font-weight:800;color:var(--ink3);letter-spacing:.05em;margin:0 0 12px}
 

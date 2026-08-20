@@ -2,6 +2,7 @@ import { loadFoods, byCategory, foodById, groupMembers } from './data.js';
 import { searchFoods } from './search.js';
 import { listItem, matchHint, displayName, detailScreen, esc } from './render.js';
 import { createNav } from './nav.js';
+import { shareUrl, parseShareHash, shareText } from './share.js';
 
 const shell = document.getElementById('shell');
 const title = document.getElementById('title');
@@ -174,6 +175,19 @@ function paintDetail(id, backLabel) {
   document.getElementById('back').addEventListener('click', () => nav.back());
   screen.querySelectorAll('.way[data-id]').forEach(el =>
     el.addEventListener('click', () => nav.go({ kind: 'detail', id: el.dataset.id })));
+
+  // 공유. 폰의 공유 시트를 여는 내장 기능이 있을 때만 버튼을 보인다
+  // (데스크톱 구형 브라우저 등에서는 조용히 빠진다 — 즐겨찾기와 같은 원칙).
+  const share = document.getElementById('share');
+  if (navigator.share) {
+    share.hidden = false;
+    share.addEventListener('click', () => {
+      navigator.share({
+        text: shareText(food),
+        url: shareUrl(location.origin + location.pathname, food.id),
+      }).catch(() => { /* 공유 시트를 그냥 닫은 것 — 오류가 아니다 */ });
+    });
+  }
 }
 
 // nav 가 상태 하나를 넘겨주면 그 화면을 그린다. 방문 기록은 nav 가 관리하므로
@@ -225,7 +239,16 @@ async function start() {
     window.addEventListener('popstate', e => nav.restore(e.state));
 
     mountShell();
+
+    // 공유 링크(#f=음식id)로 들어왔으면 그 음식 화면을 바로 연다.
+    // 해시는 읽자마자 지운다 — 이 앱의 주소는 언제나 하나라는 원칙(nav.js)은
+    // 그대로 두고, 해시는 들어올 때 한 번 쓰는 입장권으로만 쓴다.
+    // 첫 화면을 깔고 그 위에 얹으므로 받은 사람의 뒤로가기는 첫 화면으로 간다.
+    const sharedId = parseShareHash(location.hash);
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
     nav.start({ kind: 'home' });
+    if (sharedId && foodById(bundle, sharedId)) nav.go({ kind: 'detail', id: sharedId });
+
     registerOffline();
   } catch (err) {
     screen.innerHTML = `

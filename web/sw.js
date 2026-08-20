@@ -6,7 +6,7 @@
 // VERSION 은 bundle.py 가 빌드할 때마다 고쳐 쓴다. 이 파일의 내용이 바뀌어야
 // 브라우저가 새 서비스워커를 설치하기 때문이다 — 손으로 올리는 것을 잊으면
 // 사용자는 영영 옛날 버전을 보게 된다.
-const VERSION = '2026-08-13+1e468139';
+const VERSION = '2026-08-20+1e468139';
 const CACHE = `meogeodo-${VERSION}`;
 
 // 앱이 도는 데 필요한 전부. 하나라도 빠지면 오프라인에서 깨진다.
@@ -19,6 +19,7 @@ const ASSETS = [
   './render.js',
   './search.js',
   './nav.js',
+  './share.js',
   './foods.json',
   './manifest.webmanifest',
   './icon-192.png',
