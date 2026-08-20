@@ -41,12 +41,46 @@ SODIUM_CAUTION_MG = 1400
 BUILD_DATE = "2026-08-20"
 
 
-def bundle_version(payload: dict) -> str:
-    """날짜 + 데이터 내용 해시. 같은 데이터면 같은 값이라 빌드는 여전히 재현된다."""
+def assets_digest(web_dir: Path) -> str:
+    """web/ 바로 아래 배포 파일들의 내용 해시.
+
+    데이터 해시만으로는 모자라다는 것을 실제로 겪었다: 코드만 바뀐 배포
+    (공유 버튼)에서 VERSION 이 안 바뀌었고, GitHub Pages 의 10분 CDN 캐시가
+    낡은 app.js 를 내려주는 사이 서비스워커가 그것을 새 캐시에 박제했다.
+    화면은 새 데이터에 옛 코드가 섞였고, 버전이 그대로니 영영 낫지 않았다.
+
+    - foods.json 은 뺀다: 데이터는 bundle_version 의 payload 해시가 이미
+      세고 있고, 빌드 산출물이라 세면 빌드 전후로 값이 달라진다.
+    - sw.js 의 VERSION 줄은 지우고 센다: 그 줄은 이 계산의 결과로 찍히는
+      자리라, 세면 순환이 된다.
+    - 하위 폴더(tests/)는 안 본다: 배포되지 않는 파일이 버전을 바꾸면
+      사용자 폰이 의미 없이 데이터를 다시 받는다.
+    """
+    h = hashlib.sha256()
+    for f in sorted(web_dir.iterdir()):
+        if not f.is_file() or f.name == "foods.json":
+            continue
+        data = f.read_bytes()
+        if f.name == "sw.js":
+            # git 이 줄바꿈을 CRLF 로 받아둘 수 있어 \r 를 허용한다. 여기서
+            # 못 지우면 VERSION 줄이 해시에 들어가 순환이 된다.
+            text = re.sub(r"^const VERSION = '[^']*';\r?$", "",
+                          data.decode("utf-8"), count=1, flags=re.M)
+            data = text.encode("utf-8")
+        h.update(f.name.encode("utf-8"))
+        h.update(b"\0")
+        h.update(data)
+    return h.hexdigest()[:8]
+
+
+def bundle_version(payload: dict, web_dir: Path) -> str:
+    """날짜 + 데이터 해시 + 화면 코드 해시. 데이터든 코드든 한 글자라도
+    바뀌면 판이 달라져 서비스워커가 새 캐시로 갈아탄다. 같은 입력이면
+    같은 값이라 빌드는 여전히 재현된다."""
     body = json.dumps({k: v for k, v in payload.items() if k != "version"},
                       ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:8]
-    return f"{BUILD_DATE}+{digest}"
+    return f"{BUILD_DATE}+{digest}.{assets_digest(web_dir)}"
 
 # 1인분으로 보기엔 너무 큰 포장. 이 이상이면서 밀키트 이름 표시가 있는 경우에만
 # perServing(1회 분량) 계산과 나트륨 주의를 건너뛴다.
@@ -620,7 +654,7 @@ def build(base: Path):
         "groups": {k: v for k, v in groups.items() if len(v) >= 2},
         "foods": foods,
     }
-    bundle = {"version": bundle_version(bundle), **bundle}
+    bundle = {"version": bundle_version(bundle, base.parent / "web"), **bundle}
     stats = {
         "filter": filter_stats, "group": group_stats, "gi": gi_stats,
         "exchange": exchange_stats,

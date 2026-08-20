@@ -6,7 +6,7 @@
 // VERSION 은 bundle.py 가 빌드할 때마다 고쳐 쓴다. 이 파일의 내용이 바뀌어야
 // 브라우저가 새 서비스워커를 설치하기 때문이다 — 손으로 올리는 것을 잊으면
 // 사용자는 영영 옛날 버전을 보게 된다.
-const VERSION = '2026-08-20+1e468139';
+const VERSION = '2026-08-20+1e468139.2aeecfc2';
 const CACHE = `meogeodo-${VERSION}`;
 
 // 앱이 도는 데 필요한 전부. 하나라도 빠지면 오프라인에서 깨진다.
@@ -31,7 +31,14 @@ const ASSETS = [
 self.addEventListener('install', event => {
   // 하나라도 실패하면 설치를 통째로 실패시킨다. 반쯤 캐싱된 상태가 제일 나쁘다 —
   // 앱은 열리는데 데이터만 없는 화면이 된다.
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
+  //
+  // cache:'reload' 는 브라우저 HTTP 캐시를 건너뛰고 서버에서 새로 받게 한다.
+  // 실제로 겪은 사고다: GitHub Pages 는 파일을 10분씩 캐싱하는데(max-age=600),
+  // 배포 직후 설치가 그 캐시의 낡은 app.js 를 새 버전 캐시에 박제해서
+  // 새 데이터에 옛 코드가 섞인 화면이 됐고, 판 이름이 그대로니 낫지도 않았다.
+  // 새 판을 까는 순간만큼은 전부 진짜 서버에서 받아야 한다.
+  event.waitUntil(caches.open(CACHE).then(cache =>
+    cache.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', event => {

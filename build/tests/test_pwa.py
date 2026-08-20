@@ -33,10 +33,10 @@ def test_판이_데이터_내용을_따라간다():
     """날짜만 쓰면 같은 날 두 번 빌드했을 때 판이 안 바뀌어, 데이터를 고쳐도
     사용자 폰에는 옛것이 남는다. 판은 실제 데이터의 해시를 담아야 한다."""
     bundle = json.loads((WEB / "foods.json").read_text(encoding="utf-8"))
-    assert bundle_version(bundle) == bundle["version"]
+    assert bundle_version(bundle, WEB) == bundle["version"]
 
     changed = {**bundle, "foods": bundle["foods"][:-1]}
-    assert bundle_version(changed) != bundle["version"]
+    assert bundle_version(changed, WEB) != bundle["version"]
 
 
 def test_캐싱_목록에_실제_파일이_다_있다():
