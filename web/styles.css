@@ -1,5 +1,7 @@
 :root{
-  --ink:#16181d; --ink2:#6b727c; --ink3:#98a0aa;
+  /* ink3 은 원래 #98a0aa 였는데 흰 바탕에서 2.7:1 — WCAG 미달이고 60대
+     눈에는 더 안 보인다. 계층은 색 대신 글자 크기·굵기가 이미 지고 있다. */
+  --ink:#16181d; --ink2:#6b727c; --ink3:#6c737d;
   --line:#e7eaee; --line2:#f1f3f6; --page:#f4f5f7;
   --green:#1f7a4c; --green-tint:#edf7f1; --green-ink:#145638; --green-soft:#bfe3ce;
   --amber:#d99a1f; --amber-tint:#fdf6e7; --amber-ink:#6b4e11; --amber-soft:#f2ddaa;
@@ -9,6 +11,9 @@
   --unknown:#98a0aa; --unknown-tint:#f4f5f7; --unknown-ink:#4d545d; --unknown-soft:#dde1e6;
 }
 *{box-sizing:border-box}
+/* 화면에는 안 보이고 스크린리더만 읽는 글자. display:none 은 리더도 건너뛴다. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+         overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 html,body{margin:0;padding:0}
 body{
   background:#fff; color:var(--ink);

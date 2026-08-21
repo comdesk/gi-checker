@@ -53,8 +53,10 @@ export function giCell(food) {
   const num = value == null
     ? `<div class="gn" style="color:var(--ink3);font-size:20px">—</div>`
     : `<div class="gn" style="color:var(--${level}-ink)">${value}</div>`;
+  // 글자는 진한 -ink 색을 쓴다. 연한 --amber 로 쓴 '주의' 는 흰 바탕에서
+  // 2.4:1 — 목록에서 제일 안 보이는 글자였다 (숫자는 원래 -ink 였다).
   return `<span class="gi">${num}
-    <div class="gl" style="color:var(--${level})">${LEVEL_LABEL[level]}</div></span>`;
+    <div class="gl" style="color:var(--${level}-ink)">${LEVEL_LABEL[level]}</div></span>`;
 }
 
 /** 목록 한 줄의 회색 보조 문구. */
@@ -88,6 +90,17 @@ export function listItem(food) {
       ${giCell(food)}
       <span class="arw" aria-hidden="true">›</span>
     </button>`;
+}
+
+/** 자주 찾는 것 칩. 목록·상세는 색 옆에 신호등 글자가 있는데 칩만 색 점뿐이라
+ *  색을 못 보는 사용자에게는 아무 정보가 없었다. 눈에는 지금처럼 점만 보이고,
+ *  스크린리더에게만 수준이 읽히도록 숨김 글자를 넣는다. */
+export function chipItem(food) {
+  const level = food.verdict.level;
+  return `<button class="chip" data-id="${esc(food.id)}">
+    <span class="d" style="background:var(--${level})"></span>${esc(displayName(food))}
+    <span class="sr-only">${LEVEL_LABEL[level]}</span>
+  </button>`;
 }
 
 /** 무엇으로 찾았는지 알려준다. 정확·접두·부분 일치면 알릴 것이 없다. */
@@ -134,13 +147,15 @@ export function giMeter(food) {
         <span class="gi-tag">${tag}${basisText}</span>
       </span>
     </div>
-    <div class="track">
+    <div class="track" aria-hidden="true">
       <i style="width:55%;background:var(--green-soft)"></i>
       <i style="width:15%;background:var(--amber-soft)"></i>
       <i style="width:30%;background:var(--red-soft)"></i>
       <span class="mark" style="left:${pos}%;border-color:var(--${level})"></span>
     </div>
-    <div class="scale"><span>0</span><span>55</span><span>70</span><span>100</span></div>
+    <!-- 눈금은 스크린리더에게 숨긴다. 값은 위에서 "GI 지수 65" 로 이미
+         읽혔고, 여기까지 읽으면 0 55 70 100 이 맥락 없이 나열된다. -->
+    <div class="scale" aria-hidden="true"><span>0</span><span>55</span><span>70</span><span>100</span></div>
   </div>`;
 }
 
@@ -214,7 +229,7 @@ export function waysList(food, members) {
       <span class="d" style="background:var(--${level})"></span>
       <span class="w">${label}${isNow ? '<span class="badge">지금 보는 것</span>' : ''}</span>
       ${gi}
-      <span class="s" style="color:var(--${level})">${LEVEL_LABEL[level]}</span>
+      <span class="s" style="color:var(--${level}-ink)">${LEVEL_LABEL[level]}</span>
     </button>`;
   }).join('');
 
@@ -388,12 +403,12 @@ export function detailScreen(food, members, backLabel = null) {
 
   return `
     <div class="navrow">
-      <button class="nav" id="back"><span class="back">‹</span> ${esc(backLabel ?? '뒤로')}</button>
+      <button class="nav" id="back"><span class="back" aria-hidden="true">‹</span> ${esc(backLabel ?? '뒤로')}</button>
       <button class="nav share" id="share" hidden>공유<span class="share-ic" aria-hidden="true">📤</span></button>
     </div>
     <div class="accent" style="background:var(--${level})"></div>
     <div class="head">
-      <h1 class="name">${esc(displayName(food))}</h1>
+      <h1 class="name" tabindex="-1">${esc(displayName(food))}</h1>
       <span class="pill" style="background:var(--${level}-tint);
             border-color:var(--${level}-soft);color:var(--${level}-ink)">
         <span class="dot" style="background:var(--${level})"></span>${PILL_TEXT[level]}

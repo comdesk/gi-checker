@@ -1,6 +1,6 @@
 import { loadFoods, byCategory, foodById, groupMembers } from './data.js';
 import { searchFoods } from './search.js';
-import { listItem, matchHint, displayName, detailScreen, esc } from './render.js';
+import { listItem, chipItem, matchHint, displayName, detailScreen, esc } from './render.js';
 import { createNav } from './nav.js';
 import { shareUrl, parseShareHash, shareText } from './share.js';
 
@@ -11,6 +11,15 @@ const searchBox = document.getElementById('searchBox');
 const input = document.getElementById('q');
 const clearBtn = document.getElementById('clear');
 const screen = document.getElementById('screen');
+const status = document.getElementById('status');
+
+// 화면을 갈아끼우면 포커스가 body 로 떨어진다(실기기에서 확인). 키보드
+// 사용자는 매번 맨 위부터 다시 Tab 해야 하고, 스크린리더는 화면이 바뀐 것
+// 자체를 모른다. 새 화면의 제목으로 포커스를 옮기면 둘 다 해결된다.
+// 검색 목록에는 쓰지 않는다 — 타이핑 중에는 포커스가 입력창에 남아야 한다.
+function focusHeading() {
+  screen.querySelector('h1')?.focus({ preventScroll: true });
+}
 
 const CATEGORIES = [
   ['🥬', '채소'], ['🍎', '과일'], ['🍚', '밥·면·빵'],
@@ -71,6 +80,8 @@ function paintHome() {
   clearBtn.classList.add('hidden');
   subtitle.classList.remove('hidden');
   title.textContent = '이거 먹어도 돼요?';
+  document.title = '이거 먹어도 돼요?';
+  status.textContent = '';
   syncInput('');
 
   const recent = readRecent()
@@ -81,12 +92,7 @@ function paintHome() {
     ${recent.length ? `
     <section class="sec">
       <h2 class="sec-h">자주 찾는 것</h2>
-      <div class="chips">
-        ${recent.map(f => `
-          <button class="chip" data-id="${esc(f.id)}">
-            <span class="d" style="background:var(--${f.verdict.level})"></span>${esc(f.display ?? f.name)}
-          </button>`).join('')}
-      </div>
+      <div class="chips">${recent.map(chipItem).join('')}</div>
     </section>` : ''}
     <section class="sec">
       <h2 class="sec-h">눌러서 찾기</h2>
@@ -114,9 +120,13 @@ function paintList(query) {
   clearBtn.classList.remove('hidden');
   subtitle.classList.add('hidden');
   title.textContent = '이거 먹어도 돼요?';
+  document.title = '이거 먹어도 돼요?';
   syncInput(query);
 
   const hits = searchFoods(query, bundle.foods, 50);
+  // 포커스가 입력창에 남아 있어 스크린리더는 결과가 바뀐 것을 모른다.
+  // 개수만 status 로 알린다 — 목록 전체를 낭독시키면 타이핑을 못 한다.
+  status.textContent = hits.length ? `${hits.length}개 찾았어요` : '못 찾았어요';
 
   if (hits.length === 0) {
     screen.innerHTML = `
@@ -142,6 +152,8 @@ function paintList(query) {
 function paintCategory(category, backLabel) {
   shell.classList.add('hidden');
   searchBox.classList.add('hidden');
+  document.title = `${category} — 이거 먹어도 돼요?`;
+  status.textContent = '';
 
   const foods = byCategory(bundle, category)
     .sort((a, b) => {
@@ -151,13 +163,14 @@ function paintCategory(category, backLabel) {
     .slice(0, 200);
 
   screen.innerHTML = `
-    <button class="nav" id="back"><span class="back">‹</span> ${esc(backLabel ?? '처음으로')}</button>
-    <header class="brand" style="padding-top:0"><h1>${esc(category)}</h1></header>
+    <button class="nav" id="back"><span class="back" aria-hidden="true">‹</span> ${esc(backLabel ?? '처음으로')}</button>
+    <header class="brand" style="padding-top:0"><h1 tabindex="-1">${esc(category)}</h1></header>
     <p class="cnt">${foods.length}개</p>
     <div class="list">${foods.map(listItem).join('')}</div>`;
 
   document.getElementById('back').addEventListener('click', () => nav.back());
   wireItems();
+  focusHeading();
 }
 
 // ── 상세 화면 ──
@@ -168,7 +181,10 @@ function paintDetail(id, backLabel) {
   pushRecent(id);
   shell.classList.add('hidden');          // 상세에서는 검색창을 감춘다
   searchBox.classList.add('hidden');      // DOM 에서 제거하지 않는다 (조합 상태 보존)
+  document.title = `${displayName(food)} — 이거 먹어도 돼요?`;
+  status.textContent = '';
   screen.innerHTML = detailScreen(food, groupMembers(bundle, food), backLabel);
+  focusHeading();
 
   // 화면 위의 '‹' 버튼과 폰의 뒤로가기 버튼은 같은 동작이어야 한다.
   // 둘이 다른 곳으로 가면 어느 쪽을 눌렀는지에 따라 결과가 달라진다.
